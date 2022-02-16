@@ -3,3 +3,5 @@ afhq/
 *.json
 *.wandb
 *.zip
+checkpoints/
+wandb/
