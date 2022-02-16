@@ -1,0 +1,5 @@
+afhq/
+*.log
+*.json
+*.wandb
+*.zip
