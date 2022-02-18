@@ -5,3 +5,4 @@ afhq/
 *.zip
 checkpoints/
 wandb/
+pixel2style2pixel/
