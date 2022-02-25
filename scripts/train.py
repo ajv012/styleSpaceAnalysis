@@ -49,7 +49,7 @@ def main():
                     output_size = 512,
                     encoder_type = "gradual",
                     n_styles = 0,
-                    lambdas = {"adv":1, "reg":1, "rec_x":1, "rec_w":1, "lpips":1, "clf":1},
+                    lambdas = {"adv_d":1,"adv_g":1, "reg":1, "rec_x":1, "rec_w":1, "lpips":1, "clf":1},
                     train_decoder = True, # whether to train decoder,
                     dataset_type = "afhq",
                     max_steps = 50000, # max number of training steps,

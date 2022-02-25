@@ -45,6 +45,7 @@ class Coach:
 		# Initialize loss
 		# adv loss
 		if self.args.lambdas["adv"] > 0:
+			# adv loss requires generative part as well 
 			self.adv_loss = adv_loss().to(self.device) 
 		# path regularization
 		if self.args.lambdas["reg"] > 0:
@@ -143,42 +144,39 @@ class Coach:
 				self.optimizer_g.zero_grad()
 				self.optimizer_d.zero_grad()
 
-				########## Discriminator training ##########
-				self.requires_grad(self.net.decoder, False)
-				self.requires_grad(self.net.discriminator, True)
-				
-				# get fake img, return_latent = False
-				y_hat = self.net.decoder(x)
-
-				# get discriminator outputs
+				# get model outputs
+				y_hat, latent = self.net.forward(x, return_latents=True)
 				fake_pred = self.net.discriminator(y_hat)
 				real_pred = self.net.discriminator(x) 
 
-				# get discriminator loss (pick up here)
-				discriminator_loss, adv_loss_dict, _ = self.calc_loss(x, y, y_hat, latent, fake_pred, real_pred, 
-														  w_fake, w_real, mean_path_length, loss_type=["adv"])	
-
-				# discriminator updates
-				self.net.discriminator.zero_grad()	
-				discriminator_loss.backward()
-				self.optimizer_d.step()		
-
-				########## Generator + encoder training ##########
-				self.requires_grad(self.net.decoder, True)
-				self.requires_grad(self.net.discriminator, False)
-
-				# passing through encoder and generator (style gan)
-				y_hat, latent = self.net.forward(x, return_latents=True)
-
-				# get encodings
 				self.net.encoder.eval()
 				with torch.no_grad():
 					w_fake = self.net.get_encodings(y_hat)
 					w_real = self.net.get_encodings(x)
 				self.net.encoder.train()
 				
+				########## Discriminator training ##########
+				self.requires_grad(self.net.decoder, False)
+				self.requires_grad(self.net.discriminator, True)
+			
+				# get discriminator loss
+				discriminator_loss, adv_loss_dict, _ = self.calc_loss(x, y, y_hat, latent, fake_pred, real_pred, 
+														  w_fake, w_real, mean_path_length, loss_type=["adv_d"])	
+
+				# discriminator updates
+				self.net.discriminator.zero_grad()	
+				discriminator_loss.backward() # which model??
+				self.optimizer_d.step()		
+
+				### TODO: Pick up here
+				# different optims for encoder and decoder?
+
+				########## Generator ##########
+				self.requires_grad(self.net.decoder, True)
+				self.requires_grad(self.net.discriminator, False)
+				
 				# calculate losses
-				which_loss = ["reg", "rec_x", "lpips", "rec_w", "clf"]
+				which_loss = ["adv_g", "reg", "rec_x", "lpips", "rec_w", "clf"]
 				loss, loss_dict, mean_path_length = self.calc_loss(x, y, y_hat, latent, fake_pred, real_pred,
 												 w_fake, w_real, mean_path_length, loss_type=which_loss)
 
@@ -238,16 +236,20 @@ class Coach:
 		"""
 		loss_dict = {}
 		loss = 0.0
-		types = ["adv", "reg", "rec_x", "lpips", "rec_w", "clf"]
+		types = ["adv_d", "adv_g", "reg", "rec_x", "lpips", "rec_w", "clf"]
 		
 
 		for curr_loss_name in loss_type:
 			assert loss_type in types, "Invalid loss name"
 			# adversarial loss
-			if curr_loss_name == "adv":
-				loss_adv = self.adv_loss(real_pred, fake_pred)
-				loss_dict["adv_loss"] = loss_adv
-				loss += self.args.lambdas["adv"] * loss_adv
+			if curr_loss_name == "adv_d":
+				loss_adv = self.adv_loss(real_pred, fake_pred, disc = True)
+				loss_dict["adv_loss_d"] = loss_adv
+				loss += self.args.lambdas["adv_d"] * loss_adv
+			if curr_loss_name == "adv_g":
+				loss_adv = self.adv_loss(real_pred, fake_pred, disc = False)
+				loss_dict["adv_loss_g"] = loss_adv
+				loss += self.args.lambdas["adv_g"] * loss_adv
 			# path regularization
 			if curr_loss_name == "reg":
 				loss_reg, mean_path_length, path_lengths = self.reg_loss(y_hat, latent, mean_path_length)

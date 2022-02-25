@@ -98,7 +98,7 @@ class net(nn.Module):
 
 		### get clf output and concatenate it to the encoder output
 		clf_out = self.classifier(x)
-		codes = torch.cat([codes, x]) # mostly wrong, but troubleshoot as you run the code. Need to know size of codes
+		codes = torch.cat([codes, clf_out]) # mostly wrong, but troubleshoot as you run the code. Need to know size of codes
 		
 		images, result_latent = self.decoder([codes],
 		                                     input_is_latent=input_is_latent,
