@@ -12,7 +12,7 @@ import torch.nn.functional as F
 import torch.optim as optim
 
 from utils import common, train_utils
-from criteria import adv_loss, clf_loss, path_reg_loss
+from criteria import adv_loss, clf_loss, path_reg_loss, d_r1_loss
 from criteria.lpips.lpips import LPIPS
 from configs import data_configs
 from datasets.afhq_dataset import afhq_dataset
@@ -47,7 +47,7 @@ class Coach:
 		if self.args.lambdas["adv"] > 0:
 			# adv loss requires generative part as well 
 			self.adv_loss = adv_loss().to(self.device) 
-		# path regularization
+		# path regularization for generator
 		if self.args.lambdas["reg"] > 0:
 			self.reg_loss = path_reg_loss()
 		# rec_x
@@ -62,9 +62,12 @@ class Coach:
 		# clf
 		if self.args.lambdas["clf"] > 0:
 			self.clf_loss = clf_loss(self.args)
+		# discriminator regularization loss
+		if self.args.lambdas["r1"] > 10:
+			self.d_r1_loss = d_r1_loss(self.args)
 
 		# Initialize optimizer
-		self.optimizer_g, self.optimizer_d = self.configure_optimizers()
+		self.optimizer_e, self.optimizer_g, self.optimizer_d = self.configure_optimizers()
 
 		# Initialize dataset
 		self.train_dataset, self.test_dataset = self.configure_datasets()
@@ -92,20 +95,16 @@ class Coach:
 			self.args.save_interval = self.args.max_steps
 
 	def configure_optimizers(self):
-		# encoder + decoder optim
-		params_g = list(self.net.encoder.parameters())
-		if self.args.train_decoder:
-			params_g += list(self.net.decoder.parameters())
-		if self.args.optim_name == 'adam':
-			g_optimizer = torch.optim.Adam(params_g, lr=self.args.lr)
-		else:
-			g_optimizer = Ranger(params_g, lr=self.args.lr)
-
-		# discriminator optim
+		# encoder + decoder optim 
+		params_g = self.net.decoder.parameters()
+		params_e = self.net.encoder.parameters()
 		params_d = self.net.discriminator.parameters()
+
+		g_optimizer = Ranger(params_g, lr=self.args.lr_g)
+		e_optimizer = Ranger(params_e, lr=self.args.lr_g)
 		d_optimizer = optim.Adam(params_d, lr=self.args.lr_d)
 
-		return g_optimizer, d_optimizer
+		return e_optimizer, g_optimizer, d_optimizer
 
 	def configure_datasets(self):
 		print(f'Loading dataset for {self.args.dataset_type}')
@@ -141,14 +140,17 @@ class Coach:
 				x, y = batch["inputs"], batch["labels"]
 				x, y = x.to(self.device).float(), y.to(self.device).float()
 
+				self.optimizer_e.zero_grad()
 				self.optimizer_g.zero_grad()
 				self.optimizer_d.zero_grad()
 
 				# get model outputs
+				# TODO: add augmentation
 				y_hat, latent = self.net.forward(x, return_latents=True)
 				fake_pred = self.net.discriminator(y_hat)
 				real_pred = self.net.discriminator(x) 
 
+				# get intermediate encodings from encoder
 				self.net.encoder.eval()
 				with torch.no_grad():
 					w_fake = self.net.get_encodings(y_hat)
@@ -160,33 +162,50 @@ class Coach:
 				self.requires_grad(self.net.discriminator, True)
 			
 				# get discriminator loss
-				discriminator_loss, adv_loss_dict, _ = self.calc_loss(x, y, y_hat, latent, fake_pred, real_pred, 
+				d_regularize = self.global_step % self.args.d_reg_every == 0
+				if d_regularize:
+					which_loss = ["adv_d", "r1"]
+				else:
+					which_loss = ["adv_d"]
+				
+				discriminator_loss, discriminator_loss_dict, _ = self.calc_loss(x, y, y_hat, latent, fake_pred, real_pred, 
 														  w_fake, w_real, mean_path_length, loss_type=["adv_d"])	
 
 				# discriminator updates
 				self.net.discriminator.zero_grad()	
-				discriminator_loss.backward() # which model??
-				self.optimizer_d.step()		
-
-				### TODO: Pick up here
-				# different optims for encoder and decoder?
+				discriminator_loss.backward() 
+				self.optimizer_d.step()
 
 				########## Generator ##########
 				self.requires_grad(self.net.decoder, True)
 				self.requires_grad(self.net.discriminator, False)
 				
 				# calculate losses
-				which_loss = ["adv_g", "reg", "rec_x", "lpips", "rec_w", "clf"]
-				loss, loss_dict, mean_path_length = self.calc_loss(x, y, y_hat, latent, fake_pred, real_pred,
+				g_regularize = self.global_step % self.args.g_reg_every == 0
+				if g_regularize:
+					which_loss = ["adv_g", "reg", "rec_x", "lpips", "rec_w", "clf"]
+				else:
+					which_loss = ["adv_g", "rec_x", "lpips", "rec_w", "clf"]
+
+				generator_loss, generator_loss_dict, mean_path_length = self.calc_loss(x, y, y_hat, latent, fake_pred, real_pred,
 												 w_fake, w_real, mean_path_length, loss_type=which_loss)
 
 				# backward and step
-				loss.backward()
-				self.net.zero_grad()
+				self.net.decoder.zero_grad()
+				generator_loss.backward()
 				self.optimizer_g.step()
 
+				# encoder training 
+				which_loss = ["rec_x", "lpips", "rec_w", "clf"]
+				encoder_loss, encoder_loss_dict = self.calc_loss(x, y, y_hat, latent, fake_pred, real_pred,
+												 w_fake, w_real, mean_path_length, loss_type=which_loss)
+
+				self.net.encoder.zero_grad()
+				encoder_loss.bacward()
+				self.optimizer_e.step()
+
 				# all losses 
-				loss_dict = adv_loss_dict | loss_dict
+				loss_dict = discriminator_loss_dict | generator_loss_dict
 
 				# Logging related
 				if self.global_step % self.args.wandb_interval == 0:
@@ -236,7 +255,7 @@ class Coach:
 		"""
 		loss_dict = {}
 		loss = 0.0
-		types = ["adv_d", "adv_g", "reg", "rec_x", "lpips", "rec_w", "clf"]
+		types = ["adv_d", "adv_g", "reg", "rec_x", "lpips", "rec_w", "clf", "r1"]
 		
 
 		for curr_loss_name in loss_type:
@@ -246,6 +265,10 @@ class Coach:
 				loss_adv = self.adv_loss(real_pred, fake_pred, disc = True)
 				loss_dict["adv_loss_d"] = loss_adv
 				loss += self.args.lambdas["adv_d"] * loss_adv
+			if curr_loss_name == "r1":
+				loss_r1 = self.d_r1_loss(real_pred, x)
+				loss_dict["r1_loss"] = loss_r1
+				loss += self.args.lambdas["r1"] * loss_r1
 			if curr_loss_name == "adv_g":
 				loss_adv = self.adv_loss(real_pred, fake_pred, disc = False)
 				loss_dict["adv_loss_g"] = loss_adv

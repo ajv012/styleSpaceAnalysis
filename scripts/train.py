@@ -49,7 +49,7 @@ def main():
                     output_size = 512,
                     encoder_type = "gradual",
                     n_styles = 0,
-                    lambdas = {"adv_d":1,"adv_g":1, "reg":1, "rec_x":1, "rec_w":1, "lpips":1, "clf":1},
+                    lambdas = {"adv_d":1,"adv_g":1, "reg":1, "rec_x":1, "rec_w":1, "lpips":1, "clf":1, "r1" : 10},
                     train_decoder = True, # whether to train decoder,
                     dataset_type = "afhq",
                     max_steps = 50000, # max number of training steps,
@@ -58,7 +58,9 @@ def main():
                     learn_in_w = True, # Whether to learn in w space instead of w+,
                     img_size = 512, #image sizes for the model
                     channel_multiplier = 2, # channel multiplier factor for the model. config-f = 2, else = 1,
-                    val_interval = 1000, #validation interval
+                    val_interval = 1000, #validation interval,
+                    d_reg_every = 16, # interval of the applying r1 regularization,
+                    g_reg_every = 4, # interval of the applying path length regularization
     )
 	
     if os.path.exists(args.exp_dir):
