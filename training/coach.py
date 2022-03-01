@@ -67,7 +67,7 @@ class Coach:
 			self.d_r1_loss = d_r1_loss(self.args)
 
 		# Initialize optimizer
-		self.optimizer_e, self.optimizer_g, self.optimizer_d = self.configure_optimizers()
+		self.optimizer_net, self.optimizer_g, self.optimizer_d = self.configure_optimizers()
 
 		# Initialize dataset
 		self.train_dataset, self.test_dataset = self.configure_datasets()
@@ -97,14 +97,14 @@ class Coach:
 	def configure_optimizers(self):
 		# encoder + decoder optim 
 		params_g = self.net.decoder.parameters()
-		params_e = self.net.encoder.parameters()
+		params_net = list(self.net.encoder.parameters()) + list(self.net.decoder.parameters())
 		params_d = self.net.discriminator.parameters()
 
-		g_optimizer = Ranger(params_g, lr=self.args.lr_g)
-		e_optimizer = Ranger(params_e, lr=self.args.lr_g)
+		g_optimizer = optim.Adam(params_g, lr=self.args.lr_g)
+		net_optimizer = Ranger(params_net, lr=self.args.lr_g)
 		d_optimizer = optim.Adam(params_d, lr=self.args.lr_d)
 
-		return e_optimizer, g_optimizer, d_optimizer
+		return net_optimizer, g_optimizer, d_optimizer
 
 	def configure_datasets(self):
 		print(f'Loading dataset for {self.args.dataset_type}')
@@ -136,73 +136,103 @@ class Coach:
 		while self.global_step < self.args.max_steps:
 
 			for batch_idx, batch in enumerate(self.train_dataloader):
-
-				x, y = batch["inputs"], batch["labels"]
-				x, y = x.to(self.device).float(), y.to(self.device).float()
-
-				# get model outputs
-				# TODO: add augmentation
-				y_hat, latent = self.net.forward(x, return_latents=True)
-				fake_pred = self.net.discriminator(y_hat)
-				real_pred = self.net.discriminator(x) 
-
-				# get intermediate encodings from encoder
-				self.net.encoder.eval()
-				with torch.no_grad():
-					w_fake = self.net.get_encodings(y_hat)
-					w_real = self.net.get_encodings(x)
-				self.net.encoder.train()
 				
-				########## Discriminator training ##########
-				self.requires_grad(self.net.decoder, False)
-				self.requires_grad(self.net.discriminator, True)
-			
-				# get discriminator loss
+				# TODO update bc dataset changed
+				x_all, y_all = batch["inputs"], batch["labels"]
+				
+				########### GAN + Discriminator ###########
+				x_1, y_1 = x_all[0], y_all[0]
+				x_1, y_1 = x_1.to(self.device).float(), y_1.to(self.device).float()
+
+				# make noise (follow repo)
+				noise = torch.randn(self.args.batch_size, self.args.latent_dim, device=self.device)
+
+				# get conditioning output, i.e. clf out on image
+				conditioning_1 = self.net.classifier(x_1)
+
+				# send to gan -> get styles 
+				y_1_hat, latent_1 = self.net.decoder(style = noise, conditioning = conditioning_1, return_latents = True)
+				
+				# get discriminator outputs
+				real_pred_1 = self.net.discriminator(x_1)
+				fake_pred_1 = self.net.discriminator(y_1_hat)
+
+				# get ecodings for x and y_1_hat --> need for generator loss calculations
+				self.net.eval()
+				w_real_1 = self.net.get_encodings(x)
+				w_fake_1 = self.net.get_encodings(y_1_hat)
+				self.net.train()
+				
+				# discriminator losses
 				d_regularize = self.global_step % self.args.d_reg_every == 0
 				if d_regularize:
 					which_loss = ["adv_d", "r1"]
 				else:
 					which_loss = ["adv_d"]
 				
-				discriminator_loss, discriminator_loss_dict, _ = self.calc_loss(x, y, y_hat, latent, fake_pred, real_pred, 
-														  w_fake, w_real, mean_path_length, loss_type=which_loss)	
+				discriminator_loss, discriminator_loss_dict, _ = self.calc_loss(x_1, y_1, y_1_hat, latent_1, 
+																				fake_pred_1, real_pred_1, 
+														  						w_fake_1, w_real_1, mean_path_length, 
+																				loss_type=which_loss)
 
-				# discriminator updates
-				self.optimizer_d.zero_grad()
-				self.net.discriminator.zero_grad()	
-				discriminator_loss.backward() 
-				self.optimizer_d.step()
-
-				########## Generator ##########
-				self.requires_grad(self.net.decoder, True)
-				self.requires_grad(self.net.discriminator, False)
-				
-				# calculate losses
+				# generator losses
 				g_regularize = self.global_step % self.args.g_reg_every == 0
 				if g_regularize:
 					which_loss = ["adv_g", "reg", "rec_x", "lpips", "rec_w", "clf"]
 				else:
 					which_loss = ["adv_g", "rec_x", "lpips", "rec_w", "clf"]
+				# where to get w from for loss
+				generator_loss, generator_loss_dict, mean_path_length = self.calc_loss(x_1, y_1, y_1_hat, latent_1,
+																					   fake_pred_1, real_pred_1,
+												 									   w_fake_1, w_real_1, mean_path_length,
+																					   loss_type=which_loss)
 
-				generator_loss, generator_loss_dict, mean_path_length = self.calc_loss(x, y, y_hat, latent, fake_pred, real_pred,
-												 w_fake, w_real, mean_path_length, loss_type=which_loss)
+				########### Encoder ###########
+				x_2, y_2 = x_all[1], y_all[1]
+				x_2, y_2 = x_2.to(self.device).float(), y_2.to(self.device).float()
 
-				# backward and step
+				# get gan output (conditioning on clf happens in net forward method)
+				y_2_hat, latent_2 = self.net(x_2, return_latents=True)
+
+				# get encodings
+				self.net.eval()
+				w_real_2 = self.net.get_encodings(x_2)
+				w_fake_2 = self.net.get_encodings(y_2_hat)
+				self.net.train()
+
+				# get losses
+				which_loss = ["rec_x", "lpips", "rec_w", "clf"]
+				net_loss, net_loss_dict, mean_path_length = self.calc_loss(x_2, y_2, y_2_hat, latent_2,
+																					   fake_pred_1, real_pred_1,
+												 									   w_fake_2, w_real_2, mean_path_length,
+																					   loss_type=which_loss)
+
+
+				########### Backwards Stuff ###########
+				# discriminator
+				self.requires_grad(self.net.decoder, False)
+				self.requires_grad(self.net.discriminator, True)
+
+				self.optimizer_d.zero_grad()
+				self.net.discriminator.zero_grad()	
+				discriminator_loss.backward() 
+				self.optimizer_d.step()
+
+				# generator
+				self.requires_grad(self.net.decoder, True)
+				self.requires_grad(self.net.discriminator, False)
+
 				self.optimizer_g.zero_grad()
 				self.net.decoder.zero_grad()
 				generator_loss.backward()
 				self.optimizer_g.step()
 
-				# encoder training 
-				which_loss = ["rec_x", "lpips", "rec_w", "clf"]
-				encoder_loss, encoder_loss_dict = self.calc_loss(x, y, y_hat, latent, fake_pred, real_pred,
-												 w_fake, w_real, mean_path_length, loss_type=which_loss)
+				# encoder (path is thru both generator and encoder) 
+				self.optimizer_net.zero_grad()
+				self.net.zero_grad()
+				net_loss.bacward()
+				self.optimizer_net.step()
 				
-				self.optimizer_e.zero_grad()
-				self.net.encoder.zero_grad()
-				encoder_loss.bacward()
-				self.optimizer_e.step()
-
 				# all losses 
 				loss_dict = discriminator_loss_dict | generator_loss_dict
 

@@ -62,6 +62,7 @@ def main():
                     val_interval = 1000, #validation interval,
                     d_reg_every = 16, # interval of the applying r1 regularization,
                     g_reg_every = 4, # interval of the applying path length regularization
+                    latent_dim = 512, # latent dim of stylegan W network
     )
     print("defined args")
     print("-------------")

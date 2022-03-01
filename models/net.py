@@ -72,6 +72,7 @@ class net(nn.Module):
 	def forward(self, x, resize=True, latent_mask=None, input_code=False, randomize_noise=True,
 	            inject_latent=None, return_latents=False, alpha=None):
 		if input_code:
+			# if providing input codes from some other source
 			codes = x
 		else:
 			codes = self.encoder(x)
@@ -94,14 +95,15 @@ class net(nn.Module):
 				else:
 					codes[:, i] = 0
 
-		input_is_latent = not input_code
+		# check if we want to pass codes thru the stylegan MLP after passing x thru encoder to get codes
+		# input_is_latent = not input_code
 
 		### get clf output and concatenate it to the encoder output
 		clf_out = self.classifier(x)
-		codes = torch.cat([codes, clf_out]) # mostly wrong, but troubleshoot as you run the code. Need to know size of codes
+		codes = torch.cat((codes, clf_out)) # mostly wrong, but troubleshoot as you run the code. Need to know size of codes
 		
 		images, result_latent = self.decoder([codes],
-		                                     input_is_latent=input_is_latent,
+		                                     input_is_latent=False,
 		                                     randomize_noise=randomize_noise,
 		                                     return_latents=return_latents)
 

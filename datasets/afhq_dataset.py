@@ -33,14 +33,25 @@ class afhq_dataset(Dataset):
         return len(self.all_names)
 
     def __getitem__(self, idx):
-        curr_path = os.path.join(self.root_dir, self.all_names[idx].strip().split("_")[1], self.all_names[idx])
-        curr_img = Image.open(curr_path)
-        curr_label = self.labels[self.all_names[idx].strip().split("_")[1]]
-        
-        if self.img_transform:
-            curr_img_transformed = self.img_transform(curr_img)
-        
-        return {"inputs" : curr_img_transformed, "labels" : curr_label} 
+        # get two random x's from the dataset
+        x_idx = np.random.choice(range(len(self.all_names)), 2)
+
+        # store the two images and labels here
+        inputs = []
+        labels = []
+
+        # process the two images image
+        for idx in x_idx:
+            curr_path = os.path.join(self.root_dir, self.all_names[idx].strip().split("_")[1], self.all_names[idx])
+            curr_img = Image.open(curr_path)
+            curr_label = self.labels[self.all_names[idx].strip().split("_")[1]]
+            if self.img_transform:
+                curr_img_transformed = self.img_transform(curr_img)
+            inputs.append(curr_img_transformed)
+            labels.append(curr_label)        
+    
+        # return inputs (list of two images) and labels (list of two labels)
+        return {"inputs" : inputs, "labels" : labels} 
     
     def viz_img(self, imgs):
         r"""
