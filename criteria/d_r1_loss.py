@@ -1,7 +1,7 @@
 import torch
 from torch import nn
 from torch import autograd
-from models.discriminator import conv2d_gradfix
+from models.stylegan2.op import conv2d_gradfix
 
 class d_r1_loss(nn.Module):
     def __init__(self, args):

@@ -115,7 +115,7 @@ class net(nn.Module):
 
 	def get_encodings(self, x):
 		r"""
-		Get the encoding of x. Before coming here, encoder should be set to eval and no_grad should be used
+		Get the encoding of x. Before coming here, encoder should be set to eval
 		"""
 		return self.encoder(x)
 

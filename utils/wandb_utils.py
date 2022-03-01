@@ -10,6 +10,7 @@ class WBLogger:
     def __init__(self, args):
         wandb_run_name = args.exp_name
         wandb.init(project="style_space_run", config=vars(args.wandb_config), name=wandb_run_name, entity="stylespace")
+        print("Created Wandb logger successfully")
 
     @staticmethod
     def log_best_model():

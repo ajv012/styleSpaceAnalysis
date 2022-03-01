@@ -140,10 +140,6 @@ class Coach:
 				x, y = batch["inputs"], batch["labels"]
 				x, y = x.to(self.device).float(), y.to(self.device).float()
 
-				self.optimizer_e.zero_grad()
-				self.optimizer_g.zero_grad()
-				self.optimizer_d.zero_grad()
-
 				# get model outputs
 				# TODO: add augmentation
 				y_hat, latent = self.net.forward(x, return_latents=True)
@@ -169,9 +165,10 @@ class Coach:
 					which_loss = ["adv_d"]
 				
 				discriminator_loss, discriminator_loss_dict, _ = self.calc_loss(x, y, y_hat, latent, fake_pred, real_pred, 
-														  w_fake, w_real, mean_path_length, loss_type=["adv_d"])	
+														  w_fake, w_real, mean_path_length, loss_type=which_loss)	
 
 				# discriminator updates
+				self.optimizer_d.zero_grad()
 				self.net.discriminator.zero_grad()	
 				discriminator_loss.backward() 
 				self.optimizer_d.step()
@@ -191,6 +188,7 @@ class Coach:
 												 w_fake, w_real, mean_path_length, loss_type=which_loss)
 
 				# backward and step
+				self.optimizer_g.zero_grad()
 				self.net.decoder.zero_grad()
 				generator_loss.backward()
 				self.optimizer_g.step()
@@ -199,7 +197,8 @@ class Coach:
 				which_loss = ["rec_x", "lpips", "rec_w", "clf"]
 				encoder_loss, encoder_loss_dict = self.calc_loss(x, y, y_hat, latent, fake_pred, real_pred,
 												 w_fake, w_real, mean_path_length, loss_type=which_loss)
-
+				
+				self.optimizer_e.zero_grad()
 				self.net.encoder.zero_grad()
 				encoder_loss.bacward()
 				self.optimizer_e.step()

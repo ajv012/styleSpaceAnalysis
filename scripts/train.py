@@ -20,7 +20,8 @@ from training.coach import Coach
 
 
 def main():
-
+    print("in main")
+    return
     args = Namespace(device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu"),
                     train_dir = "../data/afhq/train",
                     val_dir = "../data/afhq/val",
@@ -62,19 +63,24 @@ def main():
                     d_reg_every = 16, # interval of the applying r1 regularization,
                     g_reg_every = 4, # interval of the applying path length regularization
     )
-	
+    print("defined args")
+    print("-------------")
+    return 
     if os.path.exists(args.exp_dir):
         raise Exception('Oops... {} already exists'.format(args.exp_dir))
     os.makedirs(args.exp_dir)
+    print("Made experiment directory")
 
     args_dict = vars(args)
     pprint.pprint(args_dict)
     with open(os.path.join(args.exp_dir, 'opt.json'), 'w') as f:
         json.dump(args_dict, f, indent=4, sort_keys=True)
+    print("Dumped the args in a json")
 
     coach = Coach(args)
+    print("Created coach, about to start training")
     coach.train()
 
 
 if __name__ == '__main__':
-	main()
+    main()

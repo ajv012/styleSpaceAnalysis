@@ -2,7 +2,7 @@ from configs import transforms_config
 
 DATASETS = {
     "afhq": {
-        'transforms': afhq_Transforms,
+        'transforms': transforms_config.afhq_Transforms,
         'train_dir': "../data/afhq/train",
         "val_dir": "../data/afhq/val",
         'seed': 69,

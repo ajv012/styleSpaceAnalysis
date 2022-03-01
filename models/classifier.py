@@ -13,6 +13,7 @@ class Classifier(nn.Module):
         self.model_ft.load_state_dict(checkpoint['model_state_dict'])
 
         self.model_ft.eval()
+        print("Initialized classifier")
 
     def forward(self, x: torch.Tensor):
         return self.model_ft(x)

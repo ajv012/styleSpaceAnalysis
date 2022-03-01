@@ -67,6 +67,8 @@ class GradualStyleEncoder(Module):
         self.latlayer1 = nn.Conv2d(256, 512, kernel_size=1, stride=1, padding=0)
         self.latlayer2 = nn.Conv2d(128, 512, kernel_size=1, stride=1, padding=0)
 
+        print("Created Gradual Style Encoder")
+
     def _upsample_add(self, x, y):
         '''Upsample and add two feature maps.
         Args:

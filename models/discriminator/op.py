@@ -1,9 +1,9 @@
 import torch
 from torch import nn
 import math
+import sys
 
-from models.stylegan2.op import FusedLeakyReLU, fused_leaky_relu, upfirdn2d
-import conv2d_gradfix
+from models.stylegan2.op import FusedLeakyReLU, fused_leaky_relu, upfirdn2d, conv2d_gradfix
 
 class ResBlock(nn.Module):
     def __init__(self, in_channel, out_channel, blur_kernel=[1, 3, 3, 1]):

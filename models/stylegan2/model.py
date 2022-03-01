@@ -361,6 +361,8 @@ class Generator(nn.Module):
 
         self.n_latent = self.log_size * 2 - 2
 
+        print("Made stylegan generator")
+
     def make_noise(self):
         device = self.input.input.device
 
