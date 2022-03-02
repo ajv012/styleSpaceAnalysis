@@ -43,7 +43,7 @@ class net(nn.Module):
 
 	def set_encoder(self):
 		if self.opts.encoder == 'gradual':
-			encoder = encoders.GradualStyleEncoder(50, 'ir_se', self.opts)
+			encoder = encoders.GradualStyleEncoder(num_layers=50, mode='ir_se', self.args)
 		
 		return encoder
 

@@ -62,7 +62,11 @@ def main():
                     val_interval = 1000, #validation interval,
                     d_reg_every = 16, # interval of the applying r1 regularization,
                     g_reg_every = 4, # interval of the applying path length regularization
-                    latent_dim = 512, # latent dim of stylegan W network
+                    latent_dim = 512, # latent dim of stylegan W network,
+                    num_enc_layers = 50, # number of layers in gradual style encoder,
+                    mode_enc = "ir_se", # mode for gradual style encoder 
+                    input_nc = 3, # number of input channels in img
+                    n_mlp = 8, # number of mlp in stylegan
     )
     print("defined args")
     print("-------------")

@@ -17,11 +17,14 @@ from criteria.lpips.lpips import LPIPS
 from configs import data_configs
 from datasets.afhq_dataset import afhq_dataset
 
+from models.encoders import encoders
+from models.stylegan2.model import Generator
+from models.discriminator.model import Discriminator
+from models.classifier import Classifier
+
 from utils.wandb_utils import WBLogger
 
-from models.net import net
 from training.ranger import Ranger
-
 
 class Coach:
 	def __init__(self, args):
@@ -35,12 +38,13 @@ class Coach:
 		if self.args.use_wandb:
 			self.wb_logger = WBLogger(self.args)
 		
-		# Initialize network
-		self.net = net(self.args).to(self.device)
+		# Initialize all the networks
+		models_init = self.init_models()
+		print(models_init)
 
 		# Estimate latent_avg via dense sampling if latent_avg is not available
-		if self.net.latent_avg is None:
-			self.net.latent_avg = self.net.decoder.mean_latent(int(1e5))[0].detach()
+		# if self.net.latent_avg is None:
+		# 	self.net.latent_avg = self.net.decoder.mean_latent(int(1e5))[0].detach()
 
 		# Initialize loss
 		# adv loss
@@ -67,7 +71,7 @@ class Coach:
 			self.d_r1_loss = d_r1_loss(self.args)
 
 		# Initialize optimizer
-		self.optimizer_net, self.optimizer_g, self.optimizer_d = self.configure_optimizers()
+		self.optimizer_e, self.optimizer_g, self.optimizer_d = self.configure_optimizers()
 
 		# Initialize dataset
 		self.train_dataset, self.test_dataset = self.configure_datasets()
@@ -94,17 +98,35 @@ class Coach:
 		if self.args.save_interval is None:
 			self.args.save_interval = self.args.max_steps
 
+	def init_models(self):
+		# calc num styles 
+		self.args.n_styles = int(math.log(self.args.output_size, 2)) * 2 - 2
+
+		# initialize encoder
+		self.encoder = encoders.GradualStyleEncoder(num_layers=self.args.num_enc_layers, mode=self.args.mode_enc, self.args).to(self.device) 
+
+		# initialize decoder
+		self.decoder = Generator(self.args.output_size, style_dim = self.args.latent_dim, n_mlp = self.args.n_mlp).to(self.device)
+
+		# initialize discriminator
+		self.discriminator = Discriminator(self.args.img_size, self.channel_multiplier).to(self.device)
+
+		# initialize clf
+		self.classifier = Classifier(self.args).to(self.device)
+
+		return "models initialized"
+	
 	def configure_optimizers(self):
 		# encoder + decoder optim 
-		params_g = self.net.decoder.parameters()
-		params_net = list(self.net.encoder.parameters()) + list(self.net.decoder.parameters())
-		params_d = self.net.discriminator.parameters()
+		params_g = self.decoder.parameters()
+		params_e = self.encoder.parameters()
+		params_d = self.discriminator.parameters()
 
 		g_optimizer = optim.Adam(params_g, lr=self.args.lr_g)
-		net_optimizer = Ranger(params_net, lr=self.args.lr_g)
+		e_optimizer = Ranger(params_e, lr=self.args.lr_g)
 		d_optimizer = optim.Adam(params_d, lr=self.args.lr_d)
 
-		return net_optimizer, g_optimizer, d_optimizer
+		return e_optimizer, g_optimizer, d_optimizer
 
 	def configure_datasets(self):
 		print(f'Loading dataset for {self.args.dataset_type}')
@@ -131,16 +153,18 @@ class Coach:
 			p.requires_grad = flag
 
 	def train(self):
-		self.net.train()
+
+		self.set_train_status(train = True)
 		mean_path_length = 0 
+
 		while self.global_step < self.args.max_steps:
 
 			for batch_idx, batch in enumerate(self.train_dataloader):
 				
-				# TODO update bc dataset changed
+				# get all data
 				x_all, y_all = batch["inputs"], batch["labels"]
 				
-				########### GAN + Discriminator ###########
+				########### cGAN (works with noise and x_1) ###########
 				x_1, y_1 = x_all[0], y_all[0]
 				x_1, y_1 = x_1.to(self.device).float(), y_1.to(self.device).float()
 
@@ -148,93 +172,116 @@ class Coach:
 				noise = torch.randn(self.args.batch_size, self.args.latent_dim, device=self.device)
 
 				# get conditioning output, i.e. clf out on image
-				conditioning_1 = self.net.classifier(x_1)
+				conditioning_1 = self.classifier(x_1)
 
-				# send to gan -> get styles 
-				y_1_hat, latent_1 = self.net.decoder(style = noise, conditioning = conditioning_1, return_latents = True)
-				
-				# get discriminator outputs
-				real_pred_1 = self.net.discriminator(x_1)
-				fake_pred_1 = self.net.discriminator(y_1_hat)
+				# get output of generator
+				y_1_hat, latent_1 = self.generator(style = noise, 
+												   conditioning = conditioning_1, 
+												   use_style_encoder = True, 
+												   return_latents = True)
 
-				# get ecodings for x and y_1_hat --> need for generator loss calculations
-				self.net.eval()
-				w_real_1 = self.net.get_encodings(x)
-				w_fake_1 = self.net.get_encodings(y_1_hat)
-				self.net.train()
+				# use x1 to get discriminator outputs
+				real_pred_1 = self.discriminator(x_1)
+				fake_pred_1 = self.discriminator(y_1_hat)
+
+				# use everything associated with x1 for adversarial losses
+
+				########### autoencoder (works with encoder and x_2) ###########
+				x_2, y_2 = x_all[1], y_all[1]
+				x_2, y_2 = x_2.to(self.device).float(), y_2.to(self.device).float()
+
+				# get conditioning
+				conditioning_2 = self.classifier(x_2)	
+
+				# get encodings
+				E_2 = self.encoder(x_2)
+
+				# get output of generator	
+				y_2_hat, latent_2 = self.generator(style = E_2, 
+												   conditioning = conditioning_2, 
+												   use_style_encoder = False, 
+												   return_latents = True)
 				
-				# discriminator losses
+				# get encoding of y_2_hat for loss purposes
+				self.encoder.eval()
+				w_fake_2 = self.encoder(y_2_hat)
+				self.encoder.train()
+				
+				########### calculate losses ###########
+				
+				# discriminator 
 				d_regularize = self.global_step % self.args.d_reg_every == 0
 				if d_regularize:
 					which_loss = ["adv_d", "r1"]
 				else:
 					which_loss = ["adv_d"]
-				
-				discriminator_loss, discriminator_loss_dict, _ = self.calc_loss(x_1, y_1, y_1_hat, latent_1, 
-																				fake_pred_1, real_pred_1, 
-														  						w_fake_1, w_real_1, mean_path_length, 
-																				loss_type=which_loss)
 
-				# generator losses
+				discriminator_loss, discriminator_loss_dict, _ = self.calc_loss(x_1, 
+																				fake_pred = fake_pred_1, 
+																				real_pred = real_pred_1, 
+																				loss_type=which_loss)
+				
+				# generator (adversarial losses)
 				g_regularize = self.global_step % self.args.g_reg_every == 0
 				if g_regularize:
-					which_loss = ["adv_g", "reg", "rec_x", "lpips", "rec_w", "clf"]
+					which_loss = ["adv_g", "reg"]
 				else:
-					which_loss = ["adv_g", "rec_x", "lpips", "rec_w", "clf"]
-				# where to get w from for loss
-				generator_loss, generator_loss_dict, mean_path_length = self.calc_loss(x_1, y_1, y_1_hat, latent_1,
-																					   fake_pred_1, real_pred_1,
-												 									   w_fake_1, w_real_1, mean_path_length,
+					which_loss = ["adv_g"]
+				generator_loss, generator_loss_dict, mean_path_length = self.calc_loss(x_1, 
+																					   y_hat = y_1_hat,
+																					   latent = latent_1,
+																					   fake_pred = fake_pred_1,
+																					   real_pred = real_pred_1,
+												 									   mean_path_length,
 																					   loss_type=which_loss)
 
-				########### Encoder ###########
-				x_2, y_2 = x_all[1], y_all[1]
-				x_2, y_2 = x_2.to(self.device).float(), y_2.to(self.device).float()
+				# reconstruction losses
+				which_loss = ["rec_x", "rec_w"]
+				recon_loss, recon_loss_dict, _ = self.calc_loss(x = x_2,
+											y_hat = y_2_hat,
+											w_fake = w_fake_2,
+											w_real = E_2,
+											loss_type = which_loss)
+				
+				which_loss = ["lpips"]
+				perceptual_loss, perceptual_loss_dict, _ = self.calc_loss(x = x_2, 
+												 y_hat = y_2_hat,
+											     loss_type = which_loss)
 
-				# get gan output (conditioning on clf happens in net forward method)
-				y_2_hat, latent_2 = self.net(x_2, return_latents=True)
-
-				# get encodings
-				self.net.eval()
-				w_real_2 = self.net.get_encodings(x_2)
-				w_fake_2 = self.net.get_encodings(y_2_hat)
-				self.net.train()
-
-				# get losses
-				which_loss = ["rec_x", "lpips", "rec_w", "clf"]
-				net_loss, net_loss_dict, mean_path_length = self.calc_loss(x_2, y_2, y_2_hat, latent_2,
-																					   fake_pred_1, real_pred_1,
-												 									   w_fake_2, w_real_2, mean_path_length,
-																					   loss_type=which_loss)
+				which_loss = ["clf"]
+				cycle_loss, cycle_loss_dict, _ = self.calc_loss(x = x_2,
+											y_hat = y_2_hat,
+											loss_type = which_loss)
 
 
-				########### Backwards Stuff ###########
+				# combine losses to get generator and encoder losses
+				generator_loss = generator_loss + recon_loss + perceptual_loss + cycle_loss
+				encoder_loss = recon_loss + perceptual_loss + cycle_loss
+
+				########### backpropogate ###########
 				# discriminator
-				self.requires_grad(self.net.decoder, False)
-				self.requires_grad(self.net.discriminator, True)
+				self.requires_grad(self.decoder, False)
+				self.requires_grad(self.discriminator, True)
 
 				self.optimizer_d.zero_grad()
-				self.net.discriminator.zero_grad()	
 				discriminator_loss.backward() 
-				self.optimizer_d.step()
+				self.optimizer_d.step()	
 
 				# generator
-				self.requires_grad(self.net.decoder, True)
-				self.requires_grad(self.net.discriminator, False)
+				self.requires_grad(self.decoder, True)
+				self.requires_grad(self.discriminator, False)
 
 				self.optimizer_g.zero_grad()
-				self.net.decoder.zero_grad()
 				generator_loss.backward()
 				self.optimizer_g.step()
 
-				# encoder (path is thru both generator and encoder) 
-				self.optimizer_net.zero_grad()
-				self.net.zero_grad()
-				net_loss.bacward()
-				self.optimizer_net.step()
-				
-				# all losses 
-				loss_dict = discriminator_loss_dict | generator_loss_dict
+				# encoder		
+				self.optimizer_e.zero_grad()
+				e_loss.bacward()
+				self.optimizer_e.step()	
+
+				# all losses
+				loss_dict = discriminator_loss_dict | generator_loss_dict | recon_loss_dict | perceptual_loss_dict | cycle_loss_dict
 
 				# Logging related
 				if self.global_step % self.args.wandb_interval == 0:
@@ -243,7 +290,7 @@ class Coach:
 
 				# Log images of first batch to wandb
 				if self.args.use_wandb and batch_idx == 0:
-					self.wb_logger.log_images_to_wandb(x, y, y_hat, prefix="train", step=self.global_step, opts=self.args)
+					self.wb_logger.log_images_to_wandb(x_2, y_2, y_2_hat, prefix="train", step=self.global_step, opts=self.args)
 
 				# Validation related
 				val_loss_dict = None
@@ -265,6 +312,17 @@ class Coach:
 
 				self.global_step += 1
 
+	def set_train_status(self, train = True):
+		if train:
+			self.encoder.train()
+			self.decoder.train()
+			self.discriminator.train()
+		else:
+			self.encoder.eval()
+			self.decoder.eval()
+			self.discriminator.eval()
+
+
 	def checkpoint_me(self, loss_dict, is_best):
 		save_name = 'best_model.pt' if is_best else f'iteration_{self.global_step}.pt'
 		save_dict = self.__get_save_dict()
@@ -278,7 +336,7 @@ class Coach:
 			else:
 				f.write(f'Step - {self.global_step}, \n{loss_dict}\n')
 
-	def calc_loss(self, x, y, y_hat, latent, fake_pred, real_pred, w_fake, w_real, mean_path_length, loss_type):
+	def calc_loss(self, x=None, y_hat=None, latent=None, fake_pred=None, real_pred=None, w_fake=None, w_real=None, mean_path_length=None, loss_type=None):
 		r"""
 		loss_type is a list
 		"""
@@ -289,7 +347,8 @@ class Coach:
 
 		for curr_loss_name in loss_type:
 			assert loss_type in types, "Invalid loss name"
-			# adversarial loss
+			# adversarial losses
+			#adv
 			if curr_loss_name == "adv_d":
 				loss_adv = self.adv_loss(real_pred, fake_pred, disc = True)
 				loss_dict["adv_loss_d"] = loss_adv
@@ -307,6 +366,8 @@ class Coach:
 				loss_reg, mean_path_length, path_lengths = self.reg_loss(y_hat, latent, mean_path_length)
 				loss_dict["reg"] = loss_reg
 				loss += self.args.lambdas["reg"] * loss_reg
+
+			# reconstruction losses
 			# rec_x
 			if curr_loss_name == "rec_x":
 				loss_rec_x = self.rec_x_loss(x, y_hat)
@@ -332,39 +393,58 @@ class Coach:
 		return loss, loss_dict, mean_path_length
 	
 	def validate(self):
-		self.net.eval()
-		self.net.discriminator.eval()
+
+		self.set_train_status(train = False)
 		agg_loss_dict = []
 		for batch_idx, batch in enumerate(self.test_dataloader):
 
-			x, y = batch["inputs"], batch["labels"]
+			x_all, y_all = batch["inputs"], batch["labels"]
 
 			with torch.no_grad():
-				x, y = x.to(self.device).float(), y.to(self.device).float()
+				# during validation only use the autoencoder branch 
+				x_2, y_2 = x_all[1], y_all[1]
+				x_2, y_2 = x_2.to(self.device).float(), y_2.to(self.device).float()
 
-				# get fake img, return_latent = False
-				y_hat = self.net.decoder(x)
+				# get conditioning
+				conditioning_2 = self.classifier(x_2)	
 
-				# get discriminator outputs
-				fake_pred = self.net.discriminator(y_hat)
-				real_pred = self.net.discriminator(x) 
+				# get encodings
+				E_2 = self.encoder(x_2)
 
-				# generator output
-				y_hat, latent = self.net.forward(x, return_latents=True)
+				# get output of generator	
+				y_2_hat, latent_2 = self.generator(style = E_2, 
+												   conditioning = conditioning_2, 
+												   use_style_encoder = False, 
+												   return_latents = True)
 
+				w_fake_2 = self.encoder(y_2_hat)
 				
-				w_fake = self.net.get_encodings(y_hat)
-				w_real = self.net.get_encodings(x)
+				# calculate losses
+				which_loss = ["rec_x", "rec_w"]
+				recon_loss, recon_loss_dict, _ = self.calc_loss(x = x_2,
+											y_hat = y_2_hat,
+											w_fake = w_fake_2,
+											w_real = E_2,
+											loss_type = which_loss)
+				
+				which_loss = ["lpips"]
+				perceptual_loss, perceptual_loss_dict, _ = self.calc_loss(x = x_2, 
+												 y_hat = y_2_hat,
+											     loss_type = which_loss)
 
-				# Tget losses
-				which_loss = ["adv", "reg", "rec_x", "lpips", "rec_w", "clf"]
-				loss, loss_dict, mean_path_length = self.calc_loss(x, y, y_hat, latent, fake_pred, real_pred,
-												 w_fake, w_real, mean_path_length, loss_type=which_loss)
+				which_loss = ["clf"]
+				cycle_loss, cycle_loss_dict, _ = self.calc_loss(x = x_2,
+											y_hat = y_2_hat,
+											loss_type = which_loss)
+
+				# combine losses
+				loss_dict = recon_loss_dict | perceptual_loss_dict | cycle_loss_dict
 
 			agg_loss_dict.append(loss_dict)
 
 			# Logging related
-			self.parse_and_log_images(x, y, y_hat,
+			# TODO Pick up here
+			self.parse_and_log_images(x_2, y_2, y_2_hat,
 									  title='images/test/dogs-cats',
 									  subscript='{:04d}'.format(batch_idx))
 
@@ -381,7 +461,7 @@ class Coach:
 		self.log_metrics(loss_dict, prefix='test')
 		self.print_metrics(loss_dict, prefix='test')
 
-		self.net.train()
+		self.set_train_status(train = True)
 		return loss_dict
 	
 	def print_metrics(self, metrics_dict, prefix):
