@@ -175,10 +175,12 @@ class Coach:
 				conditioning_1 = self.classifier(x_1)
 
 				# get output of generator
-				y_1_hat, latent_1 = self.generator(style = noise, 
-												   conditioning = conditioning_1, 
-												   use_style_encoder = True, 
-												   return_latents = True)
+				y_1_hat, latent_1 = self.generator(
+					style = noise, 
+					conditioning = conditioning_1, 
+					use_style_encoder = True, 
+					return_latents = True
+				)
 
 				# use x1 to get discriminator outputs
 				real_pred_1 = self.discriminator(x_1)
@@ -197,15 +199,15 @@ class Coach:
 				E_2 = self.encoder(x_2)
 
 				# get output of generator	
-				y_2_hat, latent_2 = self.generator(style = E_2, 
-												   conditioning = conditioning_2, 
-												   use_style_encoder = False, 
-												   return_latents = True)
+				y_2_hat, latent_2 = self.generator(
+					style = E_2, 
+					conditioning = conditioning_2, 
+					use_style_encoder = False, 
+					return_latents = True
+				)
 				
 				# get encoding of y_2_hat for loss purposes
-				self.encoder.eval()
 				w_fake_2 = self.encoder(y_2_hat)
-				self.encoder.train()
 				
 				########### calculate losses ###########
 				
@@ -216,10 +218,12 @@ class Coach:
 				else:
 					which_loss = ["adv_d"]
 
-				discriminator_loss, discriminator_loss_dict, _ = self.calc_loss(x_1, 
-																				fake_pred = fake_pred_1, 
-																				real_pred = real_pred_1, 
-																				loss_type=which_loss)
+				discriminator_loss, discriminator_loss_dict, _ = self.calc_loss(
+					x_1, 
+					fake_pred = fake_pred_1, 
+					real_pred = real_pred_1, 
+					loss_type=which_loss
+				)
 				
 				# generator (adversarial losses)
 				g_regularize = self.global_step % self.args.g_reg_every == 0
@@ -227,31 +231,39 @@ class Coach:
 					which_loss = ["adv_g", "reg"]
 				else:
 					which_loss = ["adv_g"]
-				generator_loss, generator_loss_dict, mean_path_length = self.calc_loss(x_1, 
-																					   y_hat = y_1_hat,
-																					   latent = latent_1,
-																					   fake_pred = fake_pred_1,
-																					   real_pred = real_pred_1,
-												 									   mean_path_length,
-																					   loss_type=which_loss)
+				generator_loss, generator_loss_dict, mean_path_length = self.calc_loss(
+					x_1, 
+					y_hat = y_1_hat,
+					latent = latent_1,
+					fake_pred = fake_pred_1,
+					real_pred = real_pred_1,
+					mean_path_length,
+					loss_type=which_loss
+				)
 
 				# reconstruction losses
 				which_loss = ["rec_x", "rec_w"]
-				recon_loss, recon_loss_dict, _ = self.calc_loss(x = x_2,
-											y_hat = y_2_hat,
-											w_fake = w_fake_2,
-											w_real = E_2,
-											loss_type = which_loss)
+				recon_loss, recon_loss_dict, _ = self.calc_loss(
+					x = x_2,
+					y_hat = y_2_hat,
+					w_fake = w_fake_2,
+					w_real = E_2,
+					loss_type = which_loss
+				)
 				
 				which_loss = ["lpips"]
-				perceptual_loss, perceptual_loss_dict, _ = self.calc_loss(x = x_2, 
-												 y_hat = y_2_hat,
-											     loss_type = which_loss)
+				perceptual_loss, perceptual_loss_dict, _ = self.calc_loss(
+					x = x_2, 
+					y_hat = y_2_hat,
+					loss_type = which_loss
+				)
 
 				which_loss = ["clf"]
-				cycle_loss, cycle_loss_dict, _ = self.calc_loss(x = x_2,
-											y_hat = y_2_hat,
-											loss_type = which_loss)
+				cycle_loss, cycle_loss_dict, _ = self.calc_loss(
+					x = x_2,
+					y_hat = y_2_hat,
+					loss_type = which_loss
+				)
 
 
 				# combine losses to get generator and encoder losses
@@ -412,30 +424,38 @@ class Coach:
 				E_2 = self.encoder(x_2)
 
 				# get output of generator	
-				y_2_hat, latent_2 = self.generator(style = E_2, 
-												   conditioning = conditioning_2, 
-												   use_style_encoder = False, 
-												   return_latents = True)
+				y_2_hat, latent_2 = self.generator(
+					style = E_2, 
+					conditioning = conditioning_2, 
+					use_style_encoder = False, 
+					return_latents = True
+				)
 
 				w_fake_2 = self.encoder(y_2_hat)
 				
 				# calculate losses
 				which_loss = ["rec_x", "rec_w"]
-				recon_loss, recon_loss_dict, _ = self.calc_loss(x = x_2,
-											y_hat = y_2_hat,
-											w_fake = w_fake_2,
-											w_real = E_2,
-											loss_type = which_loss)
+				recon_loss, recon_loss_dict, _ = self.calc_loss(
+					x = x_2,
+					y_hat = y_2_hat,
+					w_fake = w_fake_2,
+					w_real = E_2,
+					loss_type = which_loss
+				)
 				
 				which_loss = ["lpips"]
-				perceptual_loss, perceptual_loss_dict, _ = self.calc_loss(x = x_2, 
-												 y_hat = y_2_hat,
-											     loss_type = which_loss)
+				perceptual_loss, perceptual_loss_dict, _ = self.calc_loss(
+					x = x_2, 
+					y_hat = y_2_hat,
+					loss_type = which_loss
+				)
 
 				which_loss = ["clf"]
-				cycle_loss, cycle_loss_dict, _ = self.calc_loss(x = x_2,
-											y_hat = y_2_hat,
-											loss_type = which_loss)
+				cycle_loss, cycle_loss_dict, _ = self.calc_loss(
+					x = x_2,
+					y_hat = y_2_hat,
+					loss_type = which_loss
+				)
 
 				# combine losses
 				loss_dict = recon_loss_dict | perceptual_loss_dict | cycle_loss_dict
