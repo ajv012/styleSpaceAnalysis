@@ -72,16 +72,20 @@ class Coach:
 
 		# Initialize dataset
 		self.train_dataset, self.test_dataset = self.configure_datasets()
-		self.train_dataloader = DataLoader(self.train_dataset,
-											batch_size=self.args.batch_size,
-											shuffle=True,
-											num_workers=int(self.args.num_workers),
-											drop_last=True)
-		self.test_dataloader = DataLoader(self.test_dataset,
-											batch_size=self.args.test_batch_size,
-											shuffle=False,
-											num_workers=int(self.args.num_workers),
-											drop_last=True)
+		self.train_dataloader = DataLoader(
+			self.train_dataset,
+			batch_size=self.args.batch_size,
+			shuffle=True,
+			num_workers=int(self.args.num_workers),
+			drop_last=True
+		)
+		self.test_dataloader = DataLoader(
+			self.test_dataset,
+			batch_size=self.args.test_batch_size,
+			shuffle=False,
+			num_workers=int(self.args.num_workers),
+			drop_last=True
+		)
 
 		# Initialize logger
 		log_dir = os.path.join(self.args.log_dir, 'logs')
@@ -129,15 +133,20 @@ class Coach:
 		print(f'Loading dataset for {self.args.dataset_type}')
 		dataset_args = data_configs.DATASETS[self.args.dataset_type]
 		transforms_dict = dataset_args['transforms'](self.args).get_transforms()
-		train_dataset = afhq_dataset(dataset_args["train_dir"],
-									 dataset_args["seed"], 
-									 dataset_args["labels"], 
-									 transforms_dict["transform_train"])
+		train_dataset = afhq_dataset(
+			dataset_args["train_dir"],
+			dataset_args["seed"], 
+			dataset_args["labels"], 
+			transforms_dict["transform_train"]
+		)
 									
-		val_dataset = afhq_dataset(dataset_args["val_dir"],
-									 dataset_args["seed"], 
-									 dataset_args["labels"], 
-									 transforms_dict["transform_val"])
+		val_dataset = afhq_dataset(
+			dataset_args["val_dir"],
+			dataset_args["seed"], 
+			dataset_args["labels"], 
+			transforms_dict["transform_val"]
+		)
+
 		if self.args.use_wandb:
 			self.wb_logger.log_dataset_wandb(train_dataset, dataset_name="Train")
 			self.wb_logger.log_dataset_wandb(val_dataset, dataset_name="Val")
