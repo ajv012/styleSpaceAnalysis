@@ -46,7 +46,7 @@ class Discriminator(nn.Module):
             EqualLinear(channels[4] * 4 * 4, channels[4], activation="fused_lrelu"),
             EqualLinear(channels[4], 1),
         )
-        print("Created idscriminator")
+        print("Created discriminator")
 
     def forward(self, input):
         out = self.convs(input)

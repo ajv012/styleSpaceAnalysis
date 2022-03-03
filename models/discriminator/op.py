@@ -65,7 +65,8 @@ class ConvLayer(nn.Sequential):
         )
 
         if activate:
-            layers.append(FusedLeakyReLU(out_channel, bias=bias))
+            # removed bias from FusedLeakyReLU because always true in definition of FusedLeakyReLU
+            layers.append(FusedLeakyReLU(out_channel))
 
         super().__init__(*layers)
 

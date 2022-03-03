@@ -44,34 +44,16 @@ class Coach:
 		print(models_init)
 
 		# Initialize loss
-		# adv loss
-		if self.args.lambdas["adv"] > 0:
-			# adv loss requires generative part as well 
-			self.adv_loss = adv_loss().to(self.device) 
-		# path regularization for generator
-		if self.args.lambdas["reg"] > 0:
-			self.reg_loss = path_reg_loss()
-		# rec_x
-		if self.args.lambdas["rec_x"] > 0:
-			self.rec_x_loss = nn.L1Loss().to(self.device)
-		# lpips
-		if self.args.lambdas["lpips"] > 0:
-			self.lpips_loss = LPIPS(net_type='alex').to(self.device)
-		# rec_w
-		if self.args.lambdas["rec_w"] > 0:
-			self.rec_w_loss = nn.L1Loss().to(self.device)
-		# clf
-		if self.args.lambdas["clf"] > 0:
-			self.clf_loss = clf_loss(self.args)
-		# discriminator regularization loss
-		if self.args.lambdas["r1"] > 10:
-			self.d_r1_loss = d_r1_loss(self.args)
+		losses_init = self.init_losses(self.args)
+		print(losses_init)
 
 		# Initialize optimizer
 		self.optimizer_e, self.optimizer_g, self.optimizer_d = self.configure_optimizers()
+		print("initiailized optimizers for encoder, generator, decoder")
 
 		# Initialize dataset
 		self.train_dataset, self.test_dataset = self.configure_datasets()
+		print("created train and test datasets. Train len = {}, Test len = {}".format(len(self.train_dataset), len(self.test_dataset)))
 		self.train_dataloader = DataLoader(
 			self.train_dataset,
 			batch_size=self.args.batch_size,
@@ -79,6 +61,7 @@ class Coach:
 			num_workers=int(self.args.num_workers),
 			drop_last=True
 		)
+		print("created train dataloader")
 		self.test_dataloader = DataLoader(
 			self.test_dataset,
 			batch_size=self.args.test_batch_size,
@@ -91,10 +74,13 @@ class Coach:
 		log_dir = os.path.join(self.args.log_dir, 'logs')
 		os.makedirs(log_dir, exist_ok=True)
 		self.logger = SummaryWriter(log_dir=log_dir)
+		print("made log dir {} and created Tensorboard summary writer".format(log_dir))
 
 		# Initialize checkpoint dir
 		self.checkpoint_dir = os.path.join(self.args.log_dir, 'checkpoints', 'cat_dog_styleEx')
 		os.makedirs(self.checkpoint_dir, exist_ok=True)
+		print("made checkpoints dir {}".format(self.checkpoint_dir))
+
 		self.best_val_loss = None
 		if self.args.save_interval is None:
 			self.args.save_interval = self.args.max_steps
@@ -110,13 +96,47 @@ class Coach:
 		self.decoder = Generator(self.args.output_size, style_dim = self.args.latent_dim, n_mlp = self.args.n_mlp).to(self.device)
 
 		# initialize discriminator
-		self.discriminator = Discriminator(self.args.img_size, self.channel_multiplier).to(self.device)
+		self.discriminator = Discriminator(self.args.img_size, self.args.channel_multiplier).to(self.device)
 
 		# initialize clf
 		self.classifier = Classifier(self.args).to(self.device)
+		state_dict = torch.load(self.args.path_to_weights)
+		self.classifier.load_state_dict(state_dict["model_state_dict"])
+		self.classifier.eval()
 
 		return "models initialized"
 	
+	def init_losses(self, args):
+		# adv loss
+		if args.lambdas["adv_d"] > 0:
+			# adv loss requires generative part as well 
+			self.adv_loss = adv_loss().to(self.device)
+			print("initiailized adv loss") 
+		# path regularization for generator
+		if args.lambdas["reg"] > 0:
+			self.reg_loss = path_reg_loss()
+			print("initiailized path length regularization loss")
+		# rec_x
+		if args.lambdas["rec_x"] > 0:
+			self.rec_x_loss = nn.L1Loss().to(self.device)
+			print("initiailized rec_x loss")
+		# lpips
+		if args.lambdas["lpips"] > 0:
+			self.lpips_loss = LPIPS(net_type='alex').to(self.device)
+			print("initiailized lpips loss")
+		# rec_w
+		if args.lambdas["rec_w"] > 0:
+			self.rec_w_loss = nn.L1Loss().to(self.device)
+			print("initiailized rec_w loss")
+		# clf
+		if args.lambdas["clf"] > 0:
+			self.clf_loss = clf_loss(self.args)
+			print("initialized clf loss")
+		# discriminator regularization loss
+		if args.lambdas["r1"] > 10:
+			self.d_r1_loss = d_r1_loss(self.args)
+			print("initiailized r1 loss")
+
 	def configure_optimizers(self):
 		# encoder + decoder optim 
 		params_g = self.decoder.parameters()
@@ -182,7 +202,7 @@ class Coach:
 
 				# get output of generator
 				y_1_hat, latent_1 = self.generator(
-					style = noise, 
+					style = [noise], 
 					conditioning = conditioning_1, 
 					use_style_encoder = True, 
 					return_latents = True
@@ -206,7 +226,7 @@ class Coach:
 
 				# get output of generator	
 				y_2_hat, latent_2 = self.generator(
-					style = E_2, 
+					style = [E_2], 
 					conditioning = conditioning_2, 
 					use_style_encoder = False, 
 					return_latents = True
@@ -431,7 +451,7 @@ class Coach:
 
 				# get output of generator	
 				y_2_hat, latent_2 = self.generator(
-					style = E_2, 
+					style = [E_2], 
 					conditioning = conditioning_2, 
 					use_style_encoder = False, 
 					return_latents = True

@@ -21,7 +21,7 @@ from training.coach import Coach
 
 def main():
     print("in main")
-    args = Namespace(device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu"),
+    args = Namespace(device = "cuda",
                     train_dir = "../data/afhq/train",
                     val_dir = "../data/afhq/val",
                     save_path = "./checkpoints",
@@ -37,7 +37,6 @@ def main():
                     lr = 0.0001,
                     lr_d = 0.0004,
                     momentum = 0.9,
-                    criterion = nn.CrossEntropyLoss(),
                     optim_name = "ranger",
                     scheduler = "STEP",
                     scheduler_step_size = 7,
@@ -66,24 +65,23 @@ def main():
                     mode_enc = "ir_se", # mode for gradual style encoder 
                     input_nc = 3, # number of input channels in img
                     n_mlp = 8, # number of mlp in stylegan,
+                    path_to_weights = "./checkpoints/cat_dog_weights/checkpoint_2.pt",
 
     )
-    print("defined args")
-    print("-------------")
-    return 
-    if os.path.exists(args.exp_dir):
-        raise Exception('Oops... {} already exists'.format(args.exp_dir))
-    os.makedirs(args.exp_dir)
-    print("Made experiment directory")
+    print("defined args") 
 
+    os.makedirs(args.exp_dir, exist_ok=True)
+    print("Made experiment directory")
+    
     args_dict = vars(args)
-    pprint.pprint(args_dict)
+    # pprint.pprint(args_dict)
     with open(os.path.join(args.exp_dir, 'opt.json'), 'w') as f:
         json.dump(args_dict, f, indent=4, sort_keys=True)
-    print("Dumped the args in a json")
+    print("Dumped the args in a json")    
 
     coach = Coach(args)
     print("Created coach, about to start training")
+    return
     coach.train()
 
 
