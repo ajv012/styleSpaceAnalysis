@@ -42,7 +42,7 @@ class Coach:
 		# Initialize all the networks
 		models_init = self.init_models()
 		print(models_init)
-		
+
 		# Initialize loss
 		# adv loss
 		if self.args.lambdas["adv"] > 0:
@@ -100,7 +100,7 @@ class Coach:
 		self.args.n_styles = int(math.log(self.args.output_size, 2)) * 2 - 2
 
 		# initialize encoder
-		self.encoder = encoders.GradualStyleEncoder(num_layers=self.args.num_enc_layers, mode=self.args.mode_enc, self.args).to(self.device) 
+		self.encoder = encoders.GradualStyleEncoder(num_layers=self.args.num_enc_layers, mode=self.args.mode_enc, opts=self.args).to(self.device) 
 
 		# initialize decoder
 		self.decoder = Generator(self.args.output_size, style_dim = self.args.latent_dim, n_mlp = self.args.n_mlp).to(self.device)
