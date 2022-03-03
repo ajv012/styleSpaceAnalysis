@@ -21,7 +21,6 @@ from training.coach import Coach
 
 def main():
     print("in main")
-    return
     args = Namespace(device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu"),
                     train_dir = "../data/afhq/train",
                     val_dir = "../data/afhq/val",
@@ -33,7 +32,7 @@ def main():
                     batch_size = 64,
                     test_batch_size = 64,
                     epochs = 50,
-                    num_workers = 0,
+                    num_workers = 1,
                     class_names = {0:"cat", 1:"dog"} ,
                     lr = 0.0001,
                     lr_d = 0.0004,
@@ -66,7 +65,8 @@ def main():
                     num_enc_layers = 50, # number of layers in gradual style encoder,
                     mode_enc = "ir_se", # mode for gradual style encoder 
                     input_nc = 3, # number of input channels in img
-                    n_mlp = 8, # number of mlp in stylegan
+                    n_mlp = 8, # number of mlp in stylegan,
+
     )
     print("defined args")
     print("-------------")

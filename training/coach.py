@@ -1,6 +1,7 @@
 import os
 import matplotlib
 import matplotlib.pyplot as plt
+import math
 
 matplotlib.use('Agg')
 
@@ -41,11 +42,7 @@ class Coach:
 		# Initialize all the networks
 		models_init = self.init_models()
 		print(models_init)
-
-		# Estimate latent_avg via dense sampling if latent_avg is not available
-		# if self.net.latent_avg is None:
-		# 	self.net.latent_avg = self.net.decoder.mean_latent(int(1e5))[0].detach()
-
+		
 		# Initialize loss
 		# adv loss
 		if self.args.lambdas["adv"] > 0:
@@ -78,12 +75,12 @@ class Coach:
 		self.train_dataloader = DataLoader(self.train_dataset,
 											batch_size=self.args.batch_size,
 											shuffle=True,
-											num_workers=int(self.opts.workers),
+											num_workers=int(self.args.num_workers),
 											drop_last=True)
 		self.test_dataloader = DataLoader(self.test_dataset,
 											batch_size=self.args.test_batch_size,
 											shuffle=False,
-											num_workers=int(self.opts.test_workers),
+											num_workers=int(self.args.num_workers),
 											drop_last=True)
 
 		# Initialize logger
@@ -237,7 +234,7 @@ class Coach:
 					latent = latent_1,
 					fake_pred = fake_pred_1,
 					real_pred = real_pred_1,
-					mean_path_length,
+					mean_path_length = mean_path_length,
 					loss_type=which_loss
 				)
 
@@ -289,7 +286,7 @@ class Coach:
 
 				# encoder		
 				self.optimizer_e.zero_grad()
-				e_loss.bacward()
+				encoder_loss.bacward()
 				self.optimizer_e.step()	
 
 				# all losses
@@ -312,7 +309,7 @@ class Coach:
 						self.best_val_loss = val_loss_dict['loss']
 						self.checkpoint_me(val_loss_dict, is_best=True)
 
-				if self.global_step % self.opts.save_interval == 0 or self.global_step == self.opts.max_steps:
+				if self.global_step % self.args.save_interval == 0 or self.global_step == self.args.max_steps:
 					if val_loss_dict is not None:
 						self.checkpoint_me(val_loss_dict, is_best=False)
 					else:
@@ -463,21 +460,22 @@ class Coach:
 			agg_loss_dict.append(loss_dict)
 
 			# Logging related
-			# TODO Pick up here
 			self.parse_and_log_images(x_2, y_2, y_2_hat,
 									  title='images/test/dogs-cats',
 									  subscript='{:04d}'.format(batch_idx))
 
 			# Log images of first batch to wandb
 			if self.args.use_wandb and batch_idx == 0:
-				self.wb_logger.log_images_to_wandb(x, y, y_hat, prefix="test", step=self.global_step, opts=self.args)
+				self.wb_logger.log_images_to_wandb(x_2, y_2, y_2_hat, prefix="test", step=self.global_step, opts=self.args)
 
 			# For first step just do sanity test on small amount of data
 			if self.global_step == 0 and batch_idx >= 4:
-				self.net.train()
+				self.set_train_status(train=True)
 				return None  # Do not log, inaccurate in first batch
 
 		loss_dict = train_utils.aggregate_loss_dict(agg_loss_dict)
+		loss_dict["loss"] = sum([loss_dict[key] for key in loss_dict])
+		
 		self.log_metrics(loss_dict, prefix='test')
 		self.print_metrics(loss_dict, prefix='test')
 
@@ -498,13 +496,33 @@ class Coach:
 	def parse_and_log_images(self, x, y, y_hat, title, subscript=None, display_count=2):
 		im_data = []
 		for i in range(display_count):
-			cur_im_data = {
-				'input': common.tensor2im(x[i], self.opts),
-				'target': common.tensor2im(y[i]),
-				'output': common.tensor2im(y_hat[i]),
+			
+			# for current x, get clf decision and top class probability
+			curr_x =  x[i].unsqueeze(0)
+			out_x = self.classifier(curr_x)
+			values_x, preds_x = torch.max(out_x, 1)
+
+			# for current y_hat, get clf decision and top class probability
+			curr_y_hat =  y_hat[i].unsqueeze(0)
+			out_y_hat = self.classifier(curr_y_hat)
+			values_y_hat, preds_y_hat = torch.max(out_y_hat, 1) 
+
+			# define title info
+			title_info = {
+				"true_label": y, 
+				"pred_label_x": preds_x, 
+				"pred_label_y_hat": preds_y_hat,
+				"top_score_x": values_x,
+				"top_score_y_hat": values_y_hat
 			}
-			im_data.append(cur_im_data)
-		self.log_images(title, im_data=im_data, subscript=subscript)
+
+			cur_im_data = {
+				'input': common.tensor2im(x[i]), # selecting images of size [num_channels, H, W] and converting them to PIL images
+				'output': common.tensor2im(y_hat[i]),
+				"title_info": title_info
+			}
+			im_data.append(cur_im_data) # appending dictionaries 
+		self.log_images(title, im_data=im_data, subscript=subscript) #im_data is a list of dictionaries 
 
 	def log_images(self, name, im_data, subscript=None, log_latest=False):
 		fig = common.vis_outputs(im_data)
@@ -521,13 +539,12 @@ class Coach:
 
 	def __get_save_dict(self):
 		save_dict = {
-			'state_dict': self.net.state_dict(),
-			'generator_state_dict': self.net.decoder.state_dict(),
-			'discriminator_state_dict': self.net.discriminator.state_dict(),
-			'encoder_state_dict': self.net.encoder.state_dict(),
+			'generator_state_dict': self.decoder.state_dict(),
+			'discriminator_state_dict': self.discriminator.state_dict(),
+			'encoder_state_dict': self.encoder.state_dict(),
+			"optim_g": self.optimizer_g,
+			"optim_e": self.optimizer_e,
+			"optim_d": self.optimizer_d,
 			'opts': vars(self.args)
 		}
-		# save the latent avg in state_dict for inference if truncation of w was used during training
-		if self.args.start_from_latent_avg:
-			save_dict['latent_avg'] = self.net.latent_avg
 		return save_dict

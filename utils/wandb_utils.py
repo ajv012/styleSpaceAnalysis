@@ -32,11 +32,10 @@ class WBLogger:
     @staticmethod
     def log_images_to_wandb(x, y, y_hat, prefix, step, opts):
         im_data = []
-        column_names = ["Source", "Target", "Output"]
+        column_names = ["Source", "Output"]
         for i in range(len(x)):
             cur_im_data = [
                 wandb.Image(common.tensor2im(x[i])),
-                wandb.Image(common.tensor2im(y[i])),
                 wandb.Image(common.tensor2im(y_hat[i])),
             ]
             im_data.append(cur_im_data)
