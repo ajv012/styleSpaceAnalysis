@@ -9,11 +9,8 @@ from argparse import Namespace
 import torch
 import torch.nn as nn 
 
-sys.path.append(".")
-sys.path.append("..")
-
-sys.path.append("./")
-sys.path.append("../")
+# sys.path.append(".")
+# sys.path.append("..")
 
 
 from training.coach import Coach
@@ -21,16 +18,14 @@ from training.coach import Coach
 
 def main():
     print("in main")
-    args = Namespace(device = "cuda",
-                    train_dir = "../data/afhq/train",
-                    val_dir = "../data/afhq/val",
-                    save_path = "./checkpoints",
-                    exp_dir = "./args",
-                    log_dir = "./",
+    args = Namespace(device="cuda:0",
+                    train_dir = "/data/vision/polina/scratch/avaidya/data/afhq/train",
+                    val_dir = "/data/vision/polina/scratch/avaidya/data/afhq/val",
+                    exp_dir = "/data/vision/torralba/scratch/swamiviv/stylex_afhq_cat_dog",
                     seed = 7,
                     labels = ["cat", "dog"],
-                    batch_size = 64,
-                    test_batch_size = 64,
+                    batch_size = 1,
+                    test_batch_size = 1,
                     epochs = 50,
                     num_workers = 1,
                     class_names = {0:"cat", 1:"dog"} ,
@@ -41,10 +36,10 @@ def main():
                     scheduler = "STEP",
                     scheduler_step_size = 7,
                     scheduler_gamma = 0.1,
-                    exp_name = "stylespace1",
-                    wandb_config = {"learning_rate": 0.0001, "epochs": 2, "batch_size": 64},
-                    use_wandb = True,
-                    wandb_interval = 50,
+                    exp_name = "stylespace_analysis_catdog",
+                    wandb_config={"learning_rate": 0.0001, "epochs": 2, "batch_size": 64},
+                    use_wandb=True,
+                    wandb_interval=50,
                     output_size = 512,
                     encoder_type = "gradual",
                     n_styles = 0,
@@ -65,7 +60,7 @@ def main():
                     mode_enc = "ir_se", # mode for gradual style encoder 
                     input_nc = 3, # number of input channels in img
                     n_mlp = 8, # number of mlp in stylegan,
-                    path_to_weights = "./checkpoints/cat_dog_weights/checkpoint_2.pt",
+                    path_to_weights = "/data/vision/polina/scratch/avaidya/styleSpaceAnalysis/checkpoints/cat_dog_weights/checkpoint_2.pt",
 
     )
     print("defined args") 
@@ -75,9 +70,9 @@ def main():
     
     args_dict = vars(args)
     # pprint.pprint(args_dict)
-    with open(os.path.join(args.exp_dir, 'opt.json'), 'w') as f:
-        json.dump(args_dict, f, indent=4, sort_keys=True)
-    print("Dumped the args in a json")    
+    # with open(os.path.join(args.exp_dir, 'opt.json'), 'w') as f:
+    #     json.dump(args_dict, f, indent=4, sort_keys=True)
+    # print("Dumped the args in a json")
 
     coach = Coach(args)
     print("Created coach, about to start training")
@@ -87,3 +82,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+

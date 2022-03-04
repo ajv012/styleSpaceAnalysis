@@ -32,7 +32,7 @@ class GradualStyleBlock(Module):
 
 
 class GradualStyleEncoder(Module):
-    def __init__(self, num_layers, mode='ir', opts=None):
+    def __init__(self, image_size, num_layers, mode='ir', opts=None):
         super(GradualStyleEncoder, self).__init__()
         assert num_layers in [50, 100, 152], 'num_layers should be 50,100, or 152'
         assert mode in ['ir', 'ir_se'], 'mode should be ir or ir_se'
@@ -56,13 +56,14 @@ class GradualStyleEncoder(Module):
         self.style_count = opts.n_styles
         self.coarse_ind = 3
         self.middle_ind = 7
+        self.spatial = image_size / 16
         for i in range(self.style_count):
             if i < self.coarse_ind:
-                style = GradualStyleBlock(512, 512, 16)
+                style = GradualStyleBlock(512, 512, self.spatial)
             elif i < self.middle_ind:
-                style = GradualStyleBlock(512, 512, 32)
+                style = GradualStyleBlock(512, 512, self.spatial*2)
             else:
-                style = GradualStyleBlock(512, 512, 64)
+                style = GradualStyleBlock(512, 512, self.spatial*4)
             self.styles.append(style)
         self.latlayer1 = nn.Conv2d(256, 512, kernel_size=1, stride=1, padding=0)
         self.latlayer2 = nn.Conv2d(128, 512, kernel_size=1, stride=1, padding=0)
