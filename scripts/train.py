@@ -19,9 +19,9 @@ from training.coach import Coach
 def main():
     print("in main")
     args = Namespace(device="cuda:0",
-                    train_dir = "/data/vision/polina/scratch/avaidya/data/afhq/train",
-                    val_dir = "/data/vision/polina/scratch/avaidya/data/afhq/val",
-                    exp_dir = "/data/vision/torralba/scratch/swamiviv/stylex_afhq_cat_dog",
+                    train_dir = "../data/afhq/train",
+                    val_dir = "../data/afhq/val",
+                    exp_dir = "./args",
                     seed = 7,
                     labels = ["cat", "dog"],
                     batch_size = 1,
@@ -60,8 +60,7 @@ def main():
                     mode_enc = "ir_se", # mode for gradual style encoder 
                     input_nc = 3, # number of input channels in img
                     n_mlp = 8, # number of mlp in stylegan,
-                    path_to_weights = "/data/vision/polina/scratch/avaidya/styleSpaceAnalysis/checkpoints/cat_dog_weights/checkpoint_2.pt",
-
+                    path_to_weights = "./checkpoints/cat_dog_weights/checkpoint_2.pt",
     )
     print("defined args") 
 

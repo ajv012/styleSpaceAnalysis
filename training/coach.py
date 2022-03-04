@@ -136,7 +136,7 @@ class Coach:
 			self.clf_loss = clf_loss(self.classifier, self.args).to(self.device)
 			print("initialized clf loss")
 		# discriminator regularization loss
-		if args.lambdas["r1"] > 10:
+		if args.lambdas["r1"] > 0:
 			self.d_r1_loss = d_r1_loss(self.args).to(self.device)
 			print("initiailized r1 loss")
 		return "all losses created"
@@ -215,8 +215,6 @@ class Coach:
 				real_pred_1 = self.discriminator(x_1)
 				fake_pred_1 = self.discriminator(y_1_hat)
 
-				# use everything associated with x1 for adversarial losses
-
 				########### autoencoder (works with encoder and x_2) ###########
 				x_2, y_2 = x_all[1], y_all[1]
 				x_2, y_2 = x_2.to(self.device).float(), y_2.to(self.device).float()
@@ -244,15 +242,20 @@ class Coach:
 				d_regularize = self.global_step % self.args.d_reg_every == 0
 				if d_regularize:
 					which_loss = ["adv_d", "r1"]
+					x_1.requires_grad = True
+					real_pred_1 = self.discriminator(x_1)
 				else:
 					which_loss = ["adv_d"]
-
 				discriminator_loss, discriminator_loss_dict, _ = self.calc_loss(
 					x_1, 
 					fake_pred = fake_pred_1, 
 					real_pred = real_pred_1, 
 					loss_type=which_loss
 				)
+
+				print("calculated disc loss {}".format(discriminator_loss))
+				return
+				# TODO pick up here
 				
 				# generator (adversarial losses)
 				g_regularize = self.global_step % self.args.g_reg_every == 0
@@ -385,9 +388,8 @@ class Coach:
 		loss_type is a list
 		"""
 		loss_dict = {}
-		loss = 0.0
+		loss = torch.Tensor([0.0]).to(self.device)
 		types = ["adv_d", "adv_g", "reg", "rec_x", "lpips", "rec_w", "clf", "r1"]
-		
 
 		for curr_loss_name in loss_type:
 			assert curr_loss_name in types, "Invalid loss name"

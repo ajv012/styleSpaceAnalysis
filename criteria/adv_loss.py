@@ -3,6 +3,7 @@ from torch import nn
 import torchvision.transforms.functional as F
 from torch import autograd
 from models.stylegan2.op import conv2d_gradfix
+from torch.nn import functional as F
 
 class adv_loss(nn.Module):
     def __init__(self):

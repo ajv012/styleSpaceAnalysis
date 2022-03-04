@@ -14,6 +14,6 @@ class d_r1_loss(nn.Module):
                 outputs=real_pred.sum(), inputs=real_img, create_graph=True
             )
         grad_penalty = grad_real.pow(2).reshape(grad_real.shape[0], -1).sum(1).mean()
-        r1_loss = self.args.r1 / 2 * grad_penalty * self.args.d_reg_every + 0 * real_pred[0]
+        r1_loss = self.args.lambdas["r1"] / 2 * grad_penalty * self.args.d_reg_every + 0 * real_pred[0]
 
         return r1_loss
