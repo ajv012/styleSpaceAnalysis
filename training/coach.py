@@ -13,7 +13,10 @@ import torch.nn.functional as F
 import torch.optim as optim
 
 from utils import common, train_utils
-from criteria import adv_loss, clf_loss, path_reg_loss, d_r1_loss
+from criteria.d_r1_loss import d_r1_loss
+from criteria.adv_loss import adv_loss
+from criteria.clf_loss import clf_loss
+from criteria.path_reg_loss import path_reg_loss
 from criteria.lpips.lpips import LPIPS
 from configs import data_configs
 from datasets.afhq_dataset import afhq_dataset
@@ -114,7 +117,7 @@ class Coach:
 			print("initiailized adv loss") 
 		# path regularization for generator
 		if args.lambdas["reg"] > 0:
-			self.reg_loss = path_reg_loss()
+			self.reg_loss = path_reg_loss().to(self.device)
 			print("initiailized path length regularization loss")
 		# rec_x
 		if args.lambdas["rec_x"] > 0:
@@ -130,12 +133,13 @@ class Coach:
 			print("initiailized rec_w loss")
 		# clf
 		if args.lambdas["clf"] > 0:
-			self.clf_loss = clf_loss(self.args)
+			self.clf_loss = clf_loss(self.classifier, self.args).to(self.device)
 			print("initialized clf loss")
 		# discriminator regularization loss
 		if args.lambdas["r1"] > 10:
-			self.d_r1_loss = d_r1_loss(self.args)
+			self.d_r1_loss = d_r1_loss(self.args).to(self.device)
 			print("initiailized r1 loss")
+		return "all losses created"
 
 	def configure_optimizers(self):
 		# encoder + decoder optim 
@@ -168,10 +172,9 @@ class Coach:
 		)
 
 		if self.args.use_wandb:
-			self.wb_logger.log_dataset_wandb(train_dataset, dataset_name="Train")
-			self.wb_logger.log_dataset_wandb(val_dataset, dataset_name="Val")
-		print(f"Number of training samples: {len(train_dataset)}")
-		print(f"Number of test samples: {len(val_dataset)}")
+			self.wb_logger.log_dataset_wandb(train_dataset, dataset_name="Train", device=self.device)
+			self.wb_logger.log_dataset_wandb(val_dataset, dataset_name="Val", device = self.device)
+
 		return train_dataset, val_dataset
 
 	def requires_grad(self, model, flag=True):

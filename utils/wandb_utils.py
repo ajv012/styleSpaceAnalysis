@@ -19,7 +19,7 @@ class WBLogger:
     @staticmethod
     def log_dataset_wandb(dataset, dataset_name, device, n_images=16):
         idxs = np.random.choice(a=range(len(dataset)), size=n_images, replace=False)
-        data = [wandb.Image(common.tensor2im(dataset[idx]["inputs"])) for idx in idxs]
+        data = [wandb.Image(common.tensor2im(dataset[idx]["inputs"][0])) for idx in idxs]
         wandb.log({f"{dataset_name} Data Samples": data})
 
     @staticmethod
