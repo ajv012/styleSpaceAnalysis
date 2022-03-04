@@ -18,15 +18,14 @@ from training.coach import Coach
 
 def main():
     print("in main")
-<<<<<<< HEAD
     args = Namespace(device="cuda:0",
                     train_dir = "/data/vision/polina/scratch/avaidya/data/afhq/train",
                     val_dir = "/data/vision/polina/scratch/avaidya/data/afhq/val",
                     exp_dir = "/data/vision/torralba/scratch/swamiviv/stylex_afhq_cat_dog",
                     seed = 7,
                     labels = ["cat", "dog"],
-                    batch_size = 4,
-                    test_batch_size = 4,
+                    batch_size = 1,
+                    test_batch_size = 1,
                     epochs = 50,
                     num_workers = 1,
                     class_names = {0:"cat", 1:"dog"} ,
@@ -68,12 +67,6 @@ def main():
 
     os.makedirs(args.exp_dir, exist_ok=True)
     print("Made experiment directory")
-    args.save_path = os.path.join(args.exp_dir, 'checkpoints')
-    args.log_dir = os.path.join(args.exp_dir, 'logs')
-    os.makedirs(args.save_path, exist_ok=True)
-    print("Made checkpoints directory")
-    os.makedirs(args.log_dir, exist_ok=True)
-    print("Made logs directory")
     
     args_dict = vars(args)
     # pprint.pprint(args_dict)

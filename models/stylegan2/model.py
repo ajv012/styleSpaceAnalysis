@@ -440,9 +440,10 @@ class Generator(nn.Module):
             assert conditioning.shape[-1] == self.c_dim, 'Wrong conditioning dimension specified'
             conditioning = self.embed_conditioning(conditioning)
             # add conditioning to the styles
-            styles = [torch.cat((styles[0], conditioning), dim=1)]
-
-
+            if use_style_encoder:
+                styles = [torch.cat((styles[0], conditioning), dim=1)]
+            else:
+                styles = [torch.cat((styles[0], conditioning.unsqueeze(1).repeat(1, self.n_latent, 1)), dim=2)]
 
         if noise is None:
             if randomize_noise:
@@ -454,13 +455,17 @@ class Generator(nn.Module):
 
         if truncation < 1:
             style_t = []
+            if not use_style_encoder:
+                truncation_latent = truncation_latent.unsqueeze(0).repeat(1, self.n_latent, 1)
 
             for style in styles:
                 style_t.append(
                     truncation_latent + truncation * (style - truncation_latent)
                 )
 
+
             styles = style_t
+
 
         if len(styles) < 2:
             inject_index = self.n_latent
@@ -478,6 +483,7 @@ class Generator(nn.Module):
             latent2 = styles[1].unsqueeze(1).repeat(1, self.n_latent - inject_index, 1)
 
             latent = torch.cat([latent, latent2], 1)
+
 
         out = self.input(latent)
         out = self.conv1(out, latent[:, 0], noise=noise[0])

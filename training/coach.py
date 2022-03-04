@@ -93,7 +93,7 @@ class Coach:
 		self.args.n_styles = int(math.log(self.args.output_size, 2)) * 2 - 2
 
 		# initialize encoder
-		self.encoder = encoders.GradualStyleEncoder(num_layers=self.args.num_enc_layers, mode=self.args.mode_enc, opts=self.args).to(self.device) 
+		self.encoder = encoders.GradualStyleEncoder(image_size=self.args.img_size, num_layers=self.args.num_enc_layers, mode=self.args.mode_enc, opts=self.args).to(self.device)
 
 		# initialize decoder
 		self.decoder = Generator(self.args.output_size, style_dim = self.args.latent_dim, c_dim = 2, n_mlp = self.args.n_mlp).to(self.device)
@@ -228,7 +228,6 @@ class Coach:
 				encoder_rep_x_2 = self.encoder(x_2)
 
 				# get output of generator
-				import pdb; pdb.set_trace()
 				y_2_hat, latent_2 = self.decoder(
 					styles = [encoder_rep_x_2],
 					conditioning = conditioning_2, 
@@ -277,7 +276,7 @@ class Coach:
 					x = x_2,
 					y_hat = y_2_hat,
 					w_fake = w_fake_2,
-					w_real = E_2,
+					w_real = encoder_rep_x_2,
 					loss_type = which_loss
 				)
 				
@@ -391,7 +390,7 @@ class Coach:
 		
 
 		for curr_loss_name in loss_type:
-			assert loss_type in types, "Invalid loss name"
+			assert curr_loss_name in types, "Invalid loss name"
 			# adversarial losses
 			#adv
 			if curr_loss_name == "adv_d":
