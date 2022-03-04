@@ -9,11 +9,8 @@ from argparse import Namespace
 import torch
 import torch.nn as nn 
 
-sys.path.append(".")
-sys.path.append("..")
-
-sys.path.append("./")
-sys.path.append("../")
+# sys.path.append(".")
+# sys.path.append("..")
 
 
 from training.coach import Coach
@@ -22,15 +19,13 @@ from training.coach import Coach
 def main():
     print("in main")
     args = Namespace(device = "cuda",
-                    train_dir = "../data/afhq/train",
-                    val_dir = "../data/afhq/val",
-                    save_path = "./checkpoints",
-                    exp_dir = "./args",
-                    log_dir = "./",
+                    train_dir = "/data/vision/polina/scratch/avaidya/data/afhq/train",
+                    val_dir = "/data/vision/polina/scratch/avaidya/data/afhq/val",
+                    exp_dir = "/data/vision/polina/scratch/avaidya/styleSpaceAnalysis/args",
                     seed = 7,
                     labels = ["cat", "dog"],
-                    batch_size = 64,
-                    test_batch_size = 64,
+                    batch_size = 4,
+                    test_batch_size = 4,
                     epochs = 50,
                     num_workers = 1,
                     class_names = {0:"cat", 1:"dog"} ,
@@ -42,9 +37,6 @@ def main():
                     scheduler_step_size = 7,
                     scheduler_gamma = 0.1,
                     exp_name = "stylespace1",
-                    wandb_config = {"learning_rate": 0.0001, "epochs": 2, "batch_size": 64},
-                    use_wandb = True,
-                    wandb_interval = 50,
                     output_size = 512,
                     encoder_type = "gradual",
                     n_styles = 0,
@@ -65,13 +57,19 @@ def main():
                     mode_enc = "ir_se", # mode for gradual style encoder 
                     input_nc = 3, # number of input channels in img
                     n_mlp = 8, # number of mlp in stylegan,
-                    path_to_weights = "./checkpoints/cat_dog_weights/checkpoint_2.pt",
+                    path_to_weights = "/data/vision/polina/scratch/avaidya/styleSpaceAnalysis/checkpoints/cat_dog_weights/checkpoint_2.pt",
 
     )
     print("defined args") 
 
     os.makedirs(args.exp_dir, exist_ok=True)
     print("Made experiment directory")
+    args.save_path = os.path.join(args.exp_dir, 'checkpoints')
+    args.log_dir = os.path.join(args.exp_dir, 'logs')
+    os.makedirs(args.save_path, exist_ok=True)
+    print("Made checkpoints directory")
+    os.makedirs(args.log_dir, exist_ok=True)
+    print("Made logs directory")
     
     args_dict = vars(args)
     # pprint.pprint(args_dict)
@@ -87,3 +85,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+
