@@ -18,10 +18,10 @@ from training.coach import Coach
 
 def main():
     print("in main")
-    args = Namespace(device = "cuda",
+    args = Namespace(device="cuda:0",
                     train_dir = "/data/vision/polina/scratch/avaidya/data/afhq/train",
                     val_dir = "/data/vision/polina/scratch/avaidya/data/afhq/val",
-                    exp_dir = "/data/vision/polina/scratch/avaidya/styleSpaceAnalysis/args",
+                    exp_dir = "/data/vision/torralba/scratch/swamiviv/stylex_afhq_cat_dog",
                     seed = 7,
                     labels = ["cat", "dog"],
                     batch_size = 4,
@@ -36,7 +36,10 @@ def main():
                     scheduler = "STEP",
                     scheduler_step_size = 7,
                     scheduler_gamma = 0.1,
-                    exp_name = "stylespace1",
+                    exp_name = "stylespace_analysis_catdog",
+                    wandb_config={"learning_rate": 0.0001, "epochs": 2, "batch_size": 64},
+                    use_wandb=True,
+                    wandb_interval=50,
                     output_size = 512,
                     encoder_type = "gradual",
                     n_styles = 0,
@@ -64,18 +67,12 @@ def main():
 
     os.makedirs(args.exp_dir, exist_ok=True)
     print("Made experiment directory")
-    args.save_path = os.path.join(args.exp_dir, 'checkpoints')
-    args.log_dir = os.path.join(args.exp_dir, 'logs')
-    os.makedirs(args.save_path, exist_ok=True)
-    print("Made checkpoints directory")
-    os.makedirs(args.log_dir, exist_ok=True)
-    print("Made logs directory")
     
     args_dict = vars(args)
     # pprint.pprint(args_dict)
-    with open(os.path.join(args.exp_dir, 'opt.json'), 'w') as f:
-        json.dump(args_dict, f, indent=4, sort_keys=True)
-    print("Dumped the args in a json")    
+    # with open(os.path.join(args.exp_dir, 'opt.json'), 'w') as f:
+    #     json.dump(args_dict, f, indent=4, sort_keys=True)
+    # print("Dumped the args in a json")
 
     coach = Coach(args)
     print("Created coach, about to start training")

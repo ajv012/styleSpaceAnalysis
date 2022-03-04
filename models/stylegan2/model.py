@@ -281,6 +281,7 @@ class Generator(nn.Module):
             size,
             style_dim,
             n_mlp,
+            c_dim = 0,
             channel_multiplier=2,
             blur_kernel=[1, 3, 3, 1],
             lr_mlp=0.01,
@@ -297,6 +298,7 @@ class Generator(nn.Module):
         self.size = size
 
         self.style_dim = style_dim
+        self.c_dim = c_dim
 
         layers = [PixelNorm()]
 
@@ -309,24 +311,45 @@ class Generator(nn.Module):
 
         self.style = nn.Sequential(*layers)
 
+        for i in range(2):
+            layers.append(
+                EqualLinear(
+                    style_dim, style_dim, lr_mul=lr_mlp, activation='fused_lrelu'
+                )
+            )
+
+        if self.c_dim > 0:
+            self.embed_conditioning = nn.Sequential(
+                PixelNorm(),
+                EqualLinear(
+                    c_dim, style_dim, lr_mul=lr_mlp, activation='fused_lrelu'
+                ),
+                EqualLinear(
+                    style_dim, style_dim, lr_mul=lr_mlp, activation='fused_lrelu'
+                )
+            )
+            updated_style_dim = style_dim * 2
+        else:
+            updated_style_dim = style_dim
+
         # change this?
         self.channels = {
-            4: 512,
-            8: 512,
-            16: 512,
-            32: 512,
-            64: 256 * channel_multiplier,
-            128: 128 * channel_multiplier,
-            256: 64 * channel_multiplier,
-            512: 32 * channel_multiplier,
-            1024: 16 * channel_multiplier,
+            4: updated_style_dim,
+            8: updated_style_dim,
+            16: updated_style_dim,
+            32: updated_style_dim,
+            64: int(updated_style_dim / 2.) * channel_multiplier,
+            128: int(updated_style_dim / 4.) * channel_multiplier,
+            256: int(updated_style_dim / 8.) * channel_multiplier,
+            512: int(updated_style_dim / 16.) * channel_multiplier,
+            1024: int(updated_style_dim / 32.) * channel_multiplier,
         }
 
         self.input = ConstantInput(self.channels[4])
         self.conv1 = StyledConv(
-            self.channels[4], self.channels[4], 3, style_dim, blur_kernel=blur_kernel
+            self.channels[4], self.channels[4], 3, updated_style_dim, blur_kernel=blur_kernel
         )
-        self.to_rgb1 = ToRGB(self.channels[4], style_dim, upsample=False)
+        self.to_rgb1 = ToRGB(self.channels[4], updated_style_dim, upsample=False)
 
         # what is log_size
         self.log_size = int(math.log(size, 2)) # 9 for size = 512
@@ -337,7 +360,7 @@ class Generator(nn.Module):
         self.to_rgbs = nn.ModuleList()
         self.noises = nn.Module()
 
-        in_channel = self.channels[4] # 512
+        in_channel = self.channels[4] # updated_style_dim
 
         for layer_idx in range(self.num_layers):
             res = (layer_idx + 5) // 2
@@ -352,7 +375,7 @@ class Generator(nn.Module):
                     in_channel,
                     out_channel,
                     3,
-                    style_dim,
+                    updated_style_dim,
                     upsample=True,
                     blur_kernel=blur_kernel,
                 )
@@ -360,11 +383,11 @@ class Generator(nn.Module):
 
             self.convs.append(
                 StyledConv(
-                    out_channel, out_channel, 3, style_dim, blur_kernel=blur_kernel
+                    out_channel, out_channel, 3, updated_style_dim, blur_kernel=blur_kernel
                 )
             )
 
-            self.to_rgbs.append(ToRGB(out_channel, style_dim))
+            self.to_rgbs.append(ToRGB(out_channel, updated_style_dim))
 
             in_channel = out_channel
 
@@ -397,7 +420,7 @@ class Generator(nn.Module):
     def forward(
             self,
             styles, # can be z (noise) or E (encoder output)
-            conditioning,
+            conditioning=None,
             return_latents=False,
             return_features=False,
             inject_index=None,
@@ -409,13 +432,17 @@ class Generator(nn.Module):
     ):
 
         # if styles is noise then use the style_encoder, which is self.styles()
-        
+
         if use_style_encoder:
             styles = [self.style(s) for s in styles]
-        
 
-        # add conditioning to the styles
-        styles = [torch.cat((styles[0], conditioning), dim=1)]
+        if conditioning is not None:
+            assert conditioning.shape[-1] == self.c_dim, 'Wrong conditioning dimension specified'
+            conditioning = self.embed_conditioning(conditioning)
+            # add conditioning to the styles
+            styles = [torch.cat((styles[0], conditioning), dim=1)]
+
+
 
         if noise is None:
             if randomize_noise:
@@ -453,11 +480,7 @@ class Generator(nn.Module):
             latent = torch.cat([latent, latent2], 1)
 
         out = self.input(latent)
-        print(out.size()) # taking channels to 512. Is that ok? I don't think so
-        return ("lol", "lmao")
-
         out = self.conv1(out, latent[:, 0], noise=noise[0])
-
         skip = self.to_rgb1(out, latent[:, 1])
 
         i = 1

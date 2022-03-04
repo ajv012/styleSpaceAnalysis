@@ -74,13 +74,13 @@ class Coach:
 		)
 
 		# Initialize logger
-		log_dir = os.path.join(self.args.log_dir, 'logs')
+		log_dir = os.path.join(self.args.exp_dir, 'logs')
 		os.makedirs(log_dir, exist_ok=True)
 		self.logger = SummaryWriter(log_dir=log_dir)
 		print("made log dir {} and created Tensorboard summary writer".format(log_dir))
 
 		# Initialize checkpoint dir
-		self.checkpoint_dir = os.path.join(self.args.log_dir, 'checkpoints', 'cat_dog_styleEx')
+		self.checkpoint_dir = os.path.join(self.args.exp_dir, 'checkpoints', 'cat_dog_styleEx')
 		os.makedirs(self.checkpoint_dir, exist_ok=True)
 		print("made checkpoints dir {}".format(self.checkpoint_dir))
 
@@ -96,14 +96,14 @@ class Coach:
 		self.encoder = encoders.GradualStyleEncoder(num_layers=self.args.num_enc_layers, mode=self.args.mode_enc, opts=self.args).to(self.device) 
 
 		# initialize decoder
-		self.decoder = Generator(self.args.output_size, style_dim = self.args.latent_dim, n_mlp = self.args.n_mlp).to(self.device)
+		self.decoder = Generator(self.args.output_size, style_dim = self.args.latent_dim, c_dim = 2, n_mlp = self.args.n_mlp).to(self.device)
 
 		# initialize discriminator
 		self.discriminator = Discriminator(self.args.img_size, self.args.channel_multiplier).to(self.device)
 
 		# initialize clf
 		self.classifier = Classifier(self.args).to(self.device)
-		state_dict = torch.load(self.args.path_to_weights)
+		state_dict = torch.load(self.args.path_to_weights, map_location=self.device)
 		self.classifier.load_state_dict(state_dict["model_state_dict"])
 		self.classifier.eval()
 
@@ -211,7 +211,6 @@ class Coach:
 					return_latents = True
 				)
 
-				return 
 				# use x1 to get discriminator outputs
 				real_pred_1 = self.discriminator(x_1)
 				fake_pred_1 = self.discriminator(y_1_hat)
@@ -226,11 +225,12 @@ class Coach:
 				conditioning_2 = self.classifier(x_2)	
 
 				# get encodings
-				E_2 = self.encoder(x_2)
+				encoder_rep_x_2 = self.encoder(x_2)
 
-				# get output of generator	
+				# get output of generator
+				import pdb; pdb.set_trace()
 				y_2_hat, latent_2 = self.decoder(
-					style = [E_2], 
+					styles = [encoder_rep_x_2],
 					conditioning = conditioning_2, 
 					use_style_encoder = False, 
 					return_latents = True

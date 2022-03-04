@@ -113,5 +113,6 @@ class GradualStyleEncoder(Module):
         for j in range(self.middle_ind, self.style_count):
             latents.append(self.styles[j](p1))
 
+        import pdb; pdb.set_trace()
         out = torch.stack(latents, dim=1)
         return out
