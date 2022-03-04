@@ -81,7 +81,7 @@ def main():
 
     coach = Coach(args)
     print("Created coach, about to start training")
-    return
+    
     coach.train()
 
 

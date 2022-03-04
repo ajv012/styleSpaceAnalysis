@@ -204,13 +204,14 @@ class Coach:
 				conditioning_1 = self.classifier(x_1)
 
 				# get output of generator
-				y_1_hat, latent_1 = self.generator(
-					style = [noise], 
+				y_1_hat, latent_1 = self.decoder(
+					styles = [noise], 
 					conditioning = conditioning_1, 
 					use_style_encoder = True, 
 					return_latents = True
 				)
 
+				return 
 				# use x1 to get discriminator outputs
 				real_pred_1 = self.discriminator(x_1)
 				fake_pred_1 = self.discriminator(y_1_hat)
@@ -228,7 +229,7 @@ class Coach:
 				E_2 = self.encoder(x_2)
 
 				# get output of generator	
-				y_2_hat, latent_2 = self.generator(
+				y_2_hat, latent_2 = self.decoder(
 					style = [E_2], 
 					conditioning = conditioning_2, 
 					use_style_encoder = False, 
@@ -352,16 +353,19 @@ class Coach:
 					break
 
 				self.global_step += 1
+				return 
 
 	def set_train_status(self, train = True):
 		if train:
 			self.encoder.train()
 			self.decoder.train()
 			self.discriminator.train()
+			print("set all model status to train")
 		else:
 			self.encoder.eval()
 			self.decoder.eval()
 			self.discriminator.eval()
+			print("set all model status to eval")
 
 
 	def checkpoint_me(self, loss_dict, is_best):
@@ -453,7 +457,7 @@ class Coach:
 				E_2 = self.encoder(x_2)
 
 				# get output of generator	
-				y_2_hat, latent_2 = self.generator(
+				y_2_hat, latent_2 = self.decoder(
 					style = [E_2], 
 					conditioning = conditioning_2, 
 					use_style_encoder = False, 

@@ -285,6 +285,13 @@ class Generator(nn.Module):
             blur_kernel=[1, 3, 3, 1],
             lr_mlp=0.01,
     ):
+
+        # proposed changes:
+        # - pass num_labels to generator 
+        # - use style_dim (512) for mapping network
+        # - use style_dim + num_labels after that (code rn is just getting rid of last two channels)
+        # - what about the hard coded channels?
+
         super().__init__()
 
         self.size = size
@@ -302,6 +309,7 @@ class Generator(nn.Module):
 
         self.style = nn.Sequential(*layers)
 
+        # change this?
         self.channels = {
             4: 512,
             8: 512,
@@ -320,15 +328,16 @@ class Generator(nn.Module):
         )
         self.to_rgb1 = ToRGB(self.channels[4], style_dim, upsample=False)
 
-        self.log_size = int(math.log(size, 2))
-        self.num_layers = (self.log_size - 2) * 2 + 1
+        # what is log_size
+        self.log_size = int(math.log(size, 2)) # 9 for size = 512
+        self.num_layers = (self.log_size - 2) * 2 + 1 # 15
 
         self.convs = nn.ModuleList()
         self.upsamples = nn.ModuleList()
         self.to_rgbs = nn.ModuleList()
         self.noises = nn.Module()
 
-        in_channel = self.channels[4]
+        in_channel = self.channels[4] # 512
 
         for layer_idx in range(self.num_layers):
             res = (layer_idx + 5) // 2
@@ -400,11 +409,13 @@ class Generator(nn.Module):
     ):
 
         # if styles is noise then use the style_encoder, which is self.styles()
+        
         if use_style_encoder:
             styles = [self.style(s) for s in styles]
+        
 
         # add conditioning to the styles
-        styles = torch.cat((styles, conditioning))
+        styles = [torch.cat((styles[0], conditioning), dim=1)]
 
         if noise is None:
             if randomize_noise:
@@ -442,6 +453,9 @@ class Generator(nn.Module):
             latent = torch.cat([latent, latent2], 1)
 
         out = self.input(latent)
+        print(out.size()) # taking channels to 512. Is that ok? I don't think so
+        return ("lol", "lmao")
+
         out = self.conv1(out, latent[:, 0], noise=noise[0])
 
         skip = self.to_rgb1(out, latent[:, 1])
