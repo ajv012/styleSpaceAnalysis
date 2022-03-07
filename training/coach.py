@@ -111,34 +111,34 @@ class Coach:
 	
 	def init_losses(self, args):
 		# adv loss
-		if args.lambdas["adv_d"] > 0:
-			# adv loss requires generative part as well 
-			self.adv_loss = adv_loss().to(self.device)
-			print("initiailized adv loss") 
+		#if args.lambdas["adv_d"] > 0:
+		# adv loss requires generative part as well
+		self.adv_loss = adv_loss().to(self.device)
+		print("initiailized adv loss")
 		# path regularization for generator
-		if args.lambdas["reg"] > 0:
-			self.reg_loss = path_reg_loss().to(self.device)
-			print("initiailized path length regularization loss")
+		#if args.lambdas["reg"] > 0:
+		self.reg_loss = path_reg_loss().to(self.device)
+		print("initiailized path length regularization loss")
 		# rec_x
-		if args.lambdas["rec_x"] > 0:
-			self.rec_x_loss = nn.L1Loss().to(self.device)
-			print("initiailized rec_x loss")
+		# if args.lambdas["rec_x"] > 0:
+		self.rec_x_loss = nn.L1Loss().to(self.device)
+		print("initiailized rec_x loss")
 		# lpips
-		if args.lambdas["lpips"] > 0:
-			self.lpips_loss = LPIPS(net_type='alex').to(self.device)
-			print("initiailized lpips loss")
+		# if args.lambdas["lpips"] > 0:
+		self.lpips_loss = LPIPS(net_type='alex').to(self.device)
+		print("initiailized lpips loss")
 		# rec_w
-		if args.lambdas["rec_w"] > 0:
-			self.rec_w_loss = nn.L1Loss().to(self.device)
-			print("initiailized rec_w loss")
+		#if args.lambdas["rec_w"] > 0:
+		self.rec_w_loss = nn.L1Loss().to(self.device)
+		print("initiailized rec_w loss")
 		# clf
-		if args.lambdas["clf"] > 0:
-			self.clf_loss = clf_loss(self.classifier, self.args).to(self.device)
-			print("initialized clf loss")
+		#if args.lambdas["clf"] > 0:
+		self.clf_loss = clf_loss(self.classifier, self.args).to(self.device)
+		print("initialized clf loss")
 		# discriminator regularization loss
-		if args.lambdas["r1"] > 0:
-			self.d_r1_loss = d_r1_loss(self.args).to(self.device)
-			print("initiailized r1 loss")
+		#if args.lambdas["r1"] > 0:
+		self.d_r1_loss = d_r1_loss(self.args).to(self.device)
+		print("initiailized r1 loss")
 		return "all losses created"
 
 	def configure_optimizers(self):
@@ -206,7 +206,7 @@ class Coach:
 				# get output of generator
 				y_1_hat, latent_1 = self.decoder(
 					styles = [noise], 
-					conditioning = conditioning_1, 
+					conditioning = conditioning_1,
 					use_style_encoder = True, 
 					return_latents = True
 				)
@@ -228,7 +228,7 @@ class Coach:
 				# get output of generator
 				y_2_hat, latent_2 = self.decoder(
 					styles = [encoder_rep_x_2],
-					conditioning = conditioning_2, 
+					conditioning = conditioning_2,
 					use_style_encoder = False, 
 					return_latents = True
 				)
@@ -295,30 +295,24 @@ class Coach:
 
 
 				# combine losses to get generator and encoder losses
-				decoder_loss = generator_loss + recon_loss + perceptual_loss + cycle_loss
-				encoder_loss = recon_loss + perceptual_loss + cycle_loss
+				decoder_loss = generator_loss + perceptual_loss + cycle_loss + recon_loss
+				encoder_loss = perceptual_loss + cycle_loss + recon_loss
 
-				########### backpropogate ###########
+				########### backpropagate ###########
 				# discriminator
-				self.requires_grad(self.decoder, False)
-				self.requires_grad(self.discriminator, True)
-
-				self.optimizer_d.zero_grad()
+				self.discriminator.zero_grad()
 				discriminator_loss.backward(retain_graph=True)
 				self.optimizer_d.step()	
 
 				# generator
-				self.requires_grad(self.decoder, True)
-				self.requires_grad(self.discriminator, False)
-
-				self.optimizer_g.zero_grad()
+				self.decoder.zero_grad()
 				decoder_loss.backward(retain_graph=True)
 				self.optimizer_g.step()
 
-				# encoder		
-				self.optimizer_e.zero_grad()
+				# encoder
+				self.encoder.zero_grad()
 				encoder_loss.backward()
-				self.optimizer_e.step()	
+				self.optimizer_e.step()
 
 				# all losses
 				# TODO: does not aggregate duplicates, instead replaces them
@@ -394,43 +388,43 @@ class Coach:
 			#adv
 			if curr_loss_name == "adv_d":
 				loss_adv = self.adv_loss(real_pred, fake_pred, disc = True)
-				loss_dict["adv_loss_d"] = loss_adv
-				loss += self.args.lambdas["adv_d"] * loss_adv
+				loss_dict["adv_loss_d"] = self.args.lambdas["adv_d"] * loss_adv
+				loss += loss_dict["adv_loss_d"]
 			if curr_loss_name == "r1":
 				loss_r1 = self.d_r1_loss(real_pred, x)
-				loss_dict["r1_loss"] = loss_r1
-				loss += self.args.lambdas["r1"] * loss_r1
+				loss_dict["r1_loss"] = self.args.lambdas["r1"] * loss_r1
+				loss += loss_dict["r1_loss"]
 			if curr_loss_name == "adv_g":
 				loss_adv = self.adv_loss(real_pred, fake_pred, disc = False)
-				loss_dict["adv_loss_g"] = loss_adv
-				loss += self.args.lambdas["adv_g"] * loss_adv
+				loss_dict["adv_loss_g"] = self.args.lambdas["adv_g"] * loss_adv
+				loss += loss_dict["adv_loss_g"]
 			# path regularization
 			if curr_loss_name == "reg":
 				loss_reg, mean_path_length, path_lengths = self.reg_loss(y_hat, latent, mean_path_length)
-				loss_dict["reg"] = loss_reg
-				loss += self.args.lambdas["reg"] * loss_reg
+				loss_dict["reg"] = self.args.lambdas["reg"] * loss_reg
+				loss += loss_dict["reg"]
 
 			# reconstruction losses
 			# rec_x
 			if curr_loss_name == "rec_x":
 				loss_rec_x = self.rec_x_loss(x, y_hat)
-				loss_dict["rec_x"] = loss_rec_x
-				loss += self.args.lambdas["rec_x"] * loss_rec_x
+				loss_dict["rec_x"] = self.args.lambdas["rec_x"] * loss_rec_x
+				loss += loss_dict["rec_x"]
 			# lpips
 			if curr_loss_name == "lpips":
 				loss_lpips = self.lpips_loss(x, y_hat)
-				loss_dict["lpips"] = loss_lpips
-				loss += self.args.lambdas["lpips"] * loss_lpips
+				loss_dict["lpips"] = self.args.lambdas["lpips"] * loss_lpips
+				loss += loss_dict["lpips"]
 			# rec_w
 			if curr_loss_name == "rec_w":
 				loss_rec_w = self.rec_w_loss(w_fake, w_real)
-				loss_dict["rec_w"] = loss_rec_w
-				loss += self.args.lambdas["rec_w"] * loss_rec_w
+				loss_dict["rec_w"] = self.args.lambdas["rec_w"] * loss_rec_w
+				loss += loss_dict["rec_w"]
 			# clf
 			if curr_loss_name == "clf":
-				loss_clf = self.clf_loss(x, y_hat) 
-				loss_dict["clf"] = loss_clf
-				loss += self.args.lambdas["clf"] * loss_clf
+				loss_clf = self.clf_loss(x, y_hat)
+				loss_dict["clf"] = self.args.lambdas["clf"] * loss_clf
+				loss += loss_dict["clf"]
 
 		loss_dict['loss'] = float(loss)
 		return loss, loss_dict, mean_path_length
