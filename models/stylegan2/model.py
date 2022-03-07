@@ -393,6 +393,8 @@ class Generator(nn.Module):
 
         self.n_latent = self.log_size * 2 - 2
 
+        self.output_act = torch.nn.Tanh()
+
         print("Made stylegan generator")
 
     def make_noise(self):
@@ -499,7 +501,7 @@ class Generator(nn.Module):
 
             i += 2
 
-        image = skip
+        image = self.output_act(skip)
 
         if return_latents:
             return image, latent
