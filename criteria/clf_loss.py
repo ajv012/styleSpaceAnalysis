@@ -10,7 +10,9 @@ class clf_loss(nn.Module):
 
         self.model_ft = classifier
         self.loss_func = nn.KLDivLoss().to(args.device)
+        # TODO: change to classifier output size argument
+        self.resize_input = torch.nn.AdaptiveAvgPool2d((512, 512))
         
 
     def forward(self, x: torch.Tensor, y_hat: torch.Tensor):
-        return self.loss_func(self.model_ft(x), self.model_ft(y_hat))
+        return self.loss_func(self.model_ft(self.resize_input(x)), self.model_ft(self.resize_input(y_hat)))

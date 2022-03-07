@@ -148,7 +148,7 @@ class Coach:
 		params_d = self.discriminator.parameters()
 
 		g_optimizer = optim.Adam(params_g, lr=self.args.lr_g)
-		e_optimizer = Ranger(params_e, lr=self.args.lr_g)
+		e_optimizer = optim.Adam(params_e, lr=self.args.lr_g)
 		d_optimizer = optim.Adam(params_d, lr=self.args.lr_d)
 
 		return e_optimizer, g_optimizer, d_optimizer
@@ -259,7 +259,6 @@ class Coach:
 					which_loss = ["adv_g", "reg"]
 				else:
 					which_loss = ["adv_g"]
-				import pdb; pdb.set_trace()
 				generator_loss, generator_loss_dict, mean_path_length = self.calc_loss(
 					x_1, 
 					y_hat = y_1_hat,
@@ -279,9 +278,7 @@ class Coach:
 					w_real = encoder_rep_x_2,
 					loss_type = which_loss
 				)
-				print("w_fake_2 shape: {}, w_real shape: {}".format(w_fake_2.size(), encoder_rep_x_2.size()))
-				print("calculated recon loss {}".format(recon_loss))
-				return
+
 				which_loss = ["lpips"]
 				perceptual_loss, perceptual_loss_dict, _ = self.calc_loss(
 					x = x_2, 
@@ -298,7 +295,7 @@ class Coach:
 
 
 				# combine losses to get generator and encoder losses
-				generator_loss = generator_loss + recon_loss + perceptual_loss + cycle_loss
+				decoder_loss = generator_loss + recon_loss + perceptual_loss + cycle_loss
 				encoder_loss = recon_loss + perceptual_loss + cycle_loss
 
 				########### backpropogate ###########
@@ -307,7 +304,7 @@ class Coach:
 				self.requires_grad(self.discriminator, True)
 
 				self.optimizer_d.zero_grad()
-				discriminator_loss.backward() 
+				discriminator_loss.backward(retain_graph=True)
 				self.optimizer_d.step()	
 
 				# generator
@@ -315,16 +312,18 @@ class Coach:
 				self.requires_grad(self.discriminator, False)
 
 				self.optimizer_g.zero_grad()
-				generator_loss.backward()
+				decoder_loss.backward(retain_graph=True)
 				self.optimizer_g.step()
 
 				# encoder		
 				self.optimizer_e.zero_grad()
-				encoder_loss.bacward()
+				encoder_loss.backward()
 				self.optimizer_e.step()	
 
 				# all losses
-				loss_dict = discriminator_loss_dict | generator_loss_dict | recon_loss_dict | perceptual_loss_dict | cycle_loss_dict
+				# TODO: does not aggregate duplicates, instead replaces them
+				# loss_dict = discriminator_loss_dict | generator_loss_dict | recon_loss_dict | perceptual_loss_dict | cycle_loss_dict
+				loss_dict = dict(discriminator_loss_dict.items() | generator_loss_dict.items() | recon_loss_dict.items() | perceptual_loss_dict.items() | cycle_loss_dict.items())
 
 				# Logging related
 				if self.global_step % self.args.wandb_interval == 0:
@@ -335,13 +334,13 @@ class Coach:
 				if self.args.use_wandb and batch_idx == 0:
 					self.wb_logger.log_images_to_wandb(x_2, y_2, y_2_hat, prefix="train", step=self.global_step, opts=self.args)
 
-				# Validation related
+				# # Validation related
 				val_loss_dict = None
-				if self.global_step % self.args.val_interval == 0 or self.global_step == self.args.max_steps:
-					val_loss_dict = self.validate()
-					if val_loss_dict and (self.best_val_loss is None or val_loss_dict['loss'] < self.best_val_loss):
-						self.best_val_loss = val_loss_dict['loss']
-						self.checkpoint_me(val_loss_dict, is_best=True)
+				# if self.global_step % self.args.val_interval == 0 or self.global_step == self.args.max_steps:
+				# 	val_loss_dict = self.validate()
+				# 	if val_loss_dict and (self.best_val_loss is None or val_loss_dict['loss'] < self.best_val_loss):
+				# 		self.best_val_loss = val_loss_dict['loss']
+				# 		self.checkpoint_me(val_loss_dict, is_best=True)
 
 				if self.global_step % self.args.save_interval == 0 or self.global_step == self.args.max_steps:
 					if val_loss_dict is not None:
@@ -354,7 +353,6 @@ class Coach:
 					break
 
 				self.global_step += 1
-				return 
 
 	def set_train_status(self, train = True):
 		if train:
@@ -491,7 +489,11 @@ class Coach:
 				)
 
 				# combine losses
-				loss_dict = recon_loss_dict | perceptual_loss_dict | cycle_loss_dict
+				# TODO: loss_dict union replaces duplicates
+				# loss_dict = recon_loss_dict | perceptual_loss_dict | cycle_loss_dict
+				loss_dict = dict(
+					recon_loss_dict.items() | perceptual_loss_dict.items() | cycle_loss_dict.items()
+				)
 
 			agg_loss_dict.append(loss_dict)
 

@@ -27,8 +27,8 @@ class net(nn.Module):
 		self.encoder = self.set_encoder()
 		
 		# define generator 
-		self.decoder = Generator(self.opts.output_size, 512, 8)
-		self.face_pool = torch.nn.AdaptiveAvgPool2d((256, 256))
+		self.decoder = Generator(self.opts.output_size, self.args.latent_dim, self.args.n_mlp)
+		self.face_pool = torch.nn.AdaptiveAvgPool2d((self.args.output_size, self.args.output_size))
 
 		# define discrmiinator
 		self.discriminator = Discriminator(self.args.img_size, self.channel_multiplier)

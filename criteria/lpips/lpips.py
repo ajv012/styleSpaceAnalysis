@@ -25,9 +25,10 @@ class LPIPS(nn.Module):
         # linear layers
         self.lin = LinLayers(self.net.n_channels_list).to("cuda")
         self.lin.load_state_dict(get_state_dict(net_type, version))
+        self.resize_to_256 = torch.nn.AdaptiveAvgPool2d((256, 256))
 
     def forward(self, x: torch.Tensor, y: torch.Tensor):
-        feat_x, feat_y = self.net(x), self.net(y)
+        feat_x, feat_y = self.net(self.resize_to_256(x)), self.net(self.resize_to_256(y))
 
         diff = [(fx - fy) ** 2 for fx, fy in zip(feat_x, feat_y)]
         res = [l(d).mean((2, 3), True) for d, l in zip(diff, self.lin)]

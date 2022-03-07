@@ -7,3 +7,4 @@ checkpoints/
 wandb/
 pixel2style2pixel/
 logs/
+configs/__pycache__/
