@@ -252,10 +252,6 @@ class Coach:
 					real_pred = real_pred_1, 
 					loss_type=which_loss
 				)
-
-				print("calculated disc loss {}".format(discriminator_loss))
-				return
-				# TODO pick up here
 				
 				# generator (adversarial losses)
 				g_regularize = self.global_step % self.args.g_reg_every == 0
@@ -263,6 +259,7 @@ class Coach:
 					which_loss = ["adv_g", "reg"]
 				else:
 					which_loss = ["adv_g"]
+				import pdb; pdb.set_trace()
 				generator_loss, generator_loss_dict, mean_path_length = self.calc_loss(
 					x_1, 
 					y_hat = y_1_hat,
@@ -282,7 +279,9 @@ class Coach:
 					w_real = encoder_rep_x_2,
 					loss_type = which_loss
 				)
-				
+				print("w_fake_2 shape: {}, w_real shape: {}".format(w_fake_2.size(), encoder_rep_x_2.size()))
+				print("calculated recon loss {}".format(recon_loss))
+				return
 				which_loss = ["lpips"]
 				perceptual_loss, perceptual_loss_dict, _ = self.calc_loss(
 					x = x_2, 

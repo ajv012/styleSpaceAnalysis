@@ -40,7 +40,7 @@ def main():
                     wandb_config={"learning_rate": 0.0001, "epochs": 2, "batch_size": 64},
                     use_wandb=True,
                     wandb_interval=50,
-                    output_size = 512,
+                    output_size = 128,
                     encoder_type = "gradual",
                     n_styles = 0,
                     lambdas = {"adv_d":1,"adv_g":1, "reg":1, "rec_x":1, "rec_w":1, "lpips":1, "clf":1, "r1" : 10},
@@ -50,12 +50,12 @@ def main():
                     save_interval = 5000, # checkpoint saving interval,
                     start_from_latent_avg = False, #Whether to add average latent vector to generate codes from encoder
                     learn_in_w = True, # Whether to learn in w space instead of w+,
-                    img_size = 512, #image sizes for the model
+                    img_size = 128, #image sizes for the model
                     channel_multiplier = 2, # channel multiplier factor for the model. config-f = 2, else = 1,
                     val_interval = 1000, #validation interval,
                     d_reg_every = 16, # interval of the applying r1 regularization,
                     g_reg_every = 4, # interval of the applying path length regularization
-                    latent_dim = 512, # latent dim of stylegan W network,
+                    latent_dim = 128, # latent dim of stylegan W network,
                     num_enc_layers = 50, # number of layers in gradual style encoder,
                     mode_enc = "ir_se", # mode for gradual style encoder 
                     input_nc = 3, # number of input channels in img
