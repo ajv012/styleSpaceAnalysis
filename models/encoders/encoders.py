@@ -59,11 +59,11 @@ class GradualStyleEncoder(Module):
         self.spatial = image_size / 16
         for i in range(self.style_count):
             if i < self.coarse_ind:
-                style = GradualStyleBlock(512, 256, self.spatial)
+                style = GradualStyleBlock(512, opts.latent_dim, self.spatial)
             elif i < self.middle_ind:
-                style = GradualStyleBlock(512, 256, self.spatial*2)
+                style = GradualStyleBlock(512, opts.latent_dim, self.spatial*2)
             else:
-                style = GradualStyleBlock(512, 256, self.spatial*4)
+                style = GradualStyleBlock(512, opts.latent_dim, self.spatial*4)
             self.styles.append(style)
         self.latlayer1 = nn.Conv2d(256, 512, kernel_size=1, stride=1, padding=0)
         self.latlayer2 = nn.Conv2d(128, 512, kernel_size=1, stride=1, padding=0)

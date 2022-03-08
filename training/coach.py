@@ -94,7 +94,9 @@ class Coach:
 		self.args.n_styles = int(math.log(self.args.output_size, 2)) * 2 - 2
 
 		# initialize encoder
-		self.encoder = encoders.GradualStyleEncoder(image_size=self.args.img_size, num_layers=self.args.num_enc_layers, mode=self.args.mode_enc, opts=self.args).to(self.device)
+		self.encoder = encoders.GradualStyleEncoder(
+			image_size=self.args.img_size, num_layers=self.args.num_enc_layers, mode=self.args.mode_enc, opts=self.args
+		).to(self.device)
 
 		# initialize decoder
 		self.decoder = Generator(self.args.output_size, style_dim = self.args.latent_dim, c_dim = 2, n_mlp = self.args.n_mlp).to(self.device)

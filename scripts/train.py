@@ -13,7 +13,7 @@ import torch.nn as nn
 # sys.path.append("..")
 
 
-from training.coach import Coach
+from training.coach_memory_efficient import Coach
 
 
 def main():
@@ -30,8 +30,8 @@ def main():
                     epochs = 50,
                     num_workers = 1,
                     class_names = {0:"cat", 1:"dog"} ,
-                    lr_g = 0.0001,
-                    lr_d = 0.0001,
+                    lr_g = 0.001,
+                    lr_d = 0.001,
                     momentum = 0.9,
                     optim_name = "ranger",
                     scheduler = "STEP",
@@ -40,8 +40,8 @@ def main():
                     exp_name = "stylespace_analysis_catdog",
                     wandb_config={"learning_rate": 0.0001, "epochs": 2, "batch_size": 64},
                     use_wandb=True,
-                    wandb_interval=2,
-                    output_size = 256, #Stylegan decoder output size
+                    wandb_interval=50,
+                    output_size = 128, #Stylegan decoder output size
                     encoder_type = "gradual",
                     n_styles = 0,
                     lambdas = {"adv_d":1.,"adv_g":1., "reg":1., "rec_x":1., "rec_w":1., "lpips":1., "clf":1., "r1" : 5},
@@ -51,7 +51,7 @@ def main():
                     save_interval = 100, # checkpoint saving interval,
                     start_from_latent_avg = False, #Whether to add average latent vector to generate codes from encoder
                     learn_in_w = True, # Whether to learn in w space instead of w+,
-                    img_size = 256, #image sizes for the model
+                    img_size = 128, #image sizes for the model
                     channel_multiplier = 1, # channel multiplier factor for the model. config-f = 2, else = 1,
                     val_interval = 1000, #validation interval,
                     d_reg_every = 16, # interval of the applying r1 regularization,

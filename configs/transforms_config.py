@@ -20,12 +20,12 @@ class afhq_Transforms(TransformsConfig):
 	def get_transforms(self):
 		transforms_dict = {
 			'transform_train': transforms.Compose([
-				transforms.Resize((256)),
+				transforms.Resize((128)),
 				transforms.RandomHorizontalFlip(0.5),
 				transforms.ToTensor(),
 				transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5])]),
 			'transform_val': transforms.Compose([
-				transforms.Resize((256)),
+				transforms.Resize((128)),
 				transforms.ToTensor(),
 				transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5])]),
 			'transform_inference': transforms.Compose([

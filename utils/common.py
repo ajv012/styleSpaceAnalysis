@@ -28,17 +28,17 @@ def vis_outputs(log_hooks):
 def plot_outputs(hooks_dict, fig, gs, i):
 	
 	title_info = hooks_dict["title_info"]
-	# use dict title_info in hooks dict to construct titles 
-	input_title = "true label = {}, pred label = {}, top class score = {}".format(
-		title_info["true_label"].detach().cpu().numpy(), 
-		title_info["pred_label_x"].detach().cpu().numpy(),
-		title_info["top_score_x"].detach().cpu().numpy()
+	# use dict title_info in hooks dict to construct titles
+	input_title = " true label = {}\n pred label = {}\n top class score = {:.2f}".format(
+		title_info["true_label"].detach().cpu().numpy(),
+		title_info["pred_label_x"].detach().cpu().numpy()[0],
+		title_info["top_score_x"].detach().cpu().numpy()[0]
 	)
-	
-	output_title = "true label = {}, pred label = {}, top class score = {}".format(
-		title_info["true_label"].detach().cpu().numpy(), 
-		title_info["pred_label_y_hat"].detach().cpu().numpy(), 
-		title_info["top_score_y_hat"].detach().cpu().numpy()
+
+	output_title = " true label = {}\n pred label = {}\n top class score = {:.2f}".format(
+		title_info["true_label"].detach().cpu().numpy(),
+		title_info["pred_label_y_hat"].detach().cpu().numpy()[0],
+		title_info["top_score_y_hat"].detach().cpu().numpy()[0]
 	)
 	
 	plt.imshow(hooks_dict['input'])
