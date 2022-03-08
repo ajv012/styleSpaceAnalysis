@@ -2,7 +2,7 @@ import os
 import matplotlib
 import matplotlib.pyplot as plt
 import math
-
+from tqdm import tqdm
 matplotlib.use('Agg')
 
 import torch
@@ -389,8 +389,8 @@ class Coach:
                 # all losses
                 # TODO: does not aggregate duplicates, instead replaces them
                 # loss_dict = discriminator_loss_dict | generator_loss_dict | recon_loss_dict | perceptual_loss_dict | cycle_loss_dict
-                loss_dict = dict(
-                    discriminator_loss_dict.items() | generator_loss_dict.items() | recon_loss_dict.items() | perceptual_loss_dict.items() | cycle_loss_dict.items())
+                loss_dict = dict(discriminator_loss_dict.items() | generator_loss_dict.items() | recon_loss_dict.items() | perceptual_loss_dict.items() | cycle_loss_dict.items())
+                loss_dict["loss"] = sum([loss_dict[key] for key in loss_dict if key != "loss"])
 
                 # Logging related
                 if self.global_step % self.args.wandb_interval == 0:
@@ -507,8 +507,8 @@ class Coach:
 
         self.set_train_status(train=False)
         agg_loss_dict = []
-        for batch_idx, batch in enumerate(self.test_dataloader):
-
+        for batch_idx, batch in tqdm(enumerate(self.test_dataloader), total = len(self.test_dataloader.dataset), desc = "validation"):
+            if batch_idx > 50 : return
             x_all, y_all = batch["inputs"], batch["labels"]
 
             with torch.no_grad():
@@ -520,11 +520,11 @@ class Coach:
                 conditioning_2 = self.classifier(x_2)
 
                 # get encodings
-                E_2 = self.encoder(x_2)
+                encoder_rep_x_2 = self.encoder(x_2)
 
                 # get output of generator
                 y_2_hat, latent_2 = self.decoder(
-                    styles=[E_2],
+                    styles=[encoder_rep_x_2],
                     conditioning=conditioning_2,
                     use_style_encoder=False,
                     return_latents=True
@@ -538,7 +538,7 @@ class Coach:
                     x=x_2,
                     y_hat=y_2_hat,
                     w_fake=w_fake_2,
-                    w_real=E_2,
+                    w_real=encoder_rep_x_2,
                     loss_type=which_loss
                 )
 
@@ -557,11 +557,8 @@ class Coach:
                 )
 
                 # combine losses
-                # TODO: loss_dict union replaces duplicates
-                # loss_dict = recon_loss_dict | perceptual_loss_dict | cycle_loss_dict
-                loss_dict = dict(
-                    recon_loss_dict.items() | perceptual_loss_dict.items() | cycle_loss_dict.items()
-                )
+                loss_dict = dict(recon_loss_dict.items() | perceptual_loss_dict.items() | cycle_loss_dict.items())
+                loss_dict["loss"] = sum([loss_dict[key] for key in loss_dict if key != "loss"])
 
             agg_loss_dict.append(loss_dict)
 
@@ -582,7 +579,6 @@ class Coach:
                 return None  # Do not log, inaccurate in first batch
 
         loss_dict = train_utils.aggregate_loss_dict(agg_loss_dict)
-        loss_dict["loss"] = sum([loss_dict[key] for key in loss_dict])
 
         self.log_metrics(loss_dict, prefix='test')
         self.print_metrics(loss_dict, prefix='test')
@@ -611,9 +607,9 @@ class Coach:
             values_x, preds_x = torch.max(out_x, 1)
 
             # for current y_hat, get clf decision and top class probability
-            curr_y_hat = y_hat[i].unsqueeze(0)
+            curr_y_hat =  y_hat[i].unsqueeze(0)
             out_y_hat = self.classifier(curr_y_hat)
-            values_y_hat, preds_y_hat = torch.max(out_y_hat, 1)
+            values_y_hat, preds_y_hat = torch.max(F.softmax(out_y_hat, dim = 1), 1)
 
             # define title info
             title_info = {
