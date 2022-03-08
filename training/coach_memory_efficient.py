@@ -404,11 +404,11 @@ class Coach:
 
                 # # Validation related
                 val_loss_dict = None
-                # if self.global_step % self.args.val_interval == 0 or self.global_step == self.args.max_steps:
-                # 	val_loss_dict = self.validate()
-                # 	if val_loss_dict and (self.best_val_loss is None or val_loss_dict['loss'] < self.best_val_loss):
-                # 		self.best_val_loss = val_loss_dict['loss']
-                # 		self.checkpoint_me(val_loss_dict, is_best=True)
+                if self.global_step % self.args.val_interval == 0 or self.global_step == self.args.max_steps:
+                    val_loss_dict = self.validate()
+                    if val_loss_dict and (self.best_val_loss is None or val_loss_dict['loss'] < self.best_val_loss):
+                        self.best_val_loss = val_loss_dict['loss']
+                        self.checkpoint_me(val_loss_dict, is_best=True)
 
                 if self.global_step % self.args.save_interval == 0 or self.global_step == self.args.max_steps:
                     if val_loss_dict is not None:
@@ -524,7 +524,7 @@ class Coach:
 
                 # get output of generator
                 y_2_hat, latent_2 = self.decoder(
-                    style=[E_2],
+                    styles=[E_2],
                     conditioning=conditioning_2,
                     use_style_encoder=False,
                     return_latents=True
@@ -577,6 +577,7 @@ class Coach:
 
             # For first step just do sanity test on small amount of data
             if self.global_step == 0 and batch_idx >= 4:
+                print('Performing only sanity check for first batch')
                 self.set_train_status(train=True)
                 return None  # Do not log, inaccurate in first batch
 
@@ -602,6 +603,7 @@ class Coach:
 
     def parse_and_log_images(self, x, y, y_hat, title, subscript=None, display_count=2):
         im_data = []
+        # TODO: pass as a single batch
         for i in range(display_count):
             # for current x, get clf decision and top class probability
             curr_x = x[i].unsqueeze(0)
@@ -615,7 +617,7 @@ class Coach:
 
             # define title info
             title_info = {
-                "true_label": y,
+                "true_label": y[i],
                 "pred_label_x": preds_x,
                 "pred_label_y_hat": preds_y_hat,
                 "top_score_x": values_x,
