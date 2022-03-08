@@ -2,6 +2,7 @@ import os
 import matplotlib
 import matplotlib.pyplot as plt
 import math
+from tqdm import tqdm
 
 matplotlib.use('Agg')
 
@@ -36,7 +37,7 @@ class Coach:
 
 		self.global_step = 0
 
-		# TODO: Allow multiple GPU? currently using CUDA_VISIBLE_DEVICES (use distributed module)
+		# TODO: Allow multiple GPU. Adapt to DDP
 		self.device = self.args.device  
 
 		if self.args.use_wandb:
@@ -111,38 +112,37 @@ class Coach:
 	
 	def init_losses(self, args):
 		# adv loss
-		#if args.lambdas["adv_d"] > 0:
 		# adv loss requires generative part as well
 		self.adv_loss = adv_loss().to(self.device)
 		print("initiailized adv loss")
+
 		# path regularization for generator
-		#if args.lambdas["reg"] > 0:
 		self.reg_loss = path_reg_loss().to(self.device)
 		print("initiailized path length regularization loss")
 		# rec_x
-		# if args.lambdas["rec_x"] > 0:
 		self.rec_x_loss = nn.L1Loss().to(self.device)
 		print("initiailized rec_x loss")
+
 		# lpips
-		# if args.lambdas["lpips"] > 0:
 		self.lpips_loss = LPIPS(net_type='alex').to(self.device)
 		print("initiailized lpips loss")
+
 		# rec_w
-		#if args.lambdas["rec_w"] > 0:
 		self.rec_w_loss = nn.L1Loss().to(self.device)
 		print("initiailized rec_w loss")
+
 		# clf
-		#if args.lambdas["clf"] > 0:
 		self.clf_loss = clf_loss(self.classifier, self.args).to(self.device)
 		print("initialized clf loss")
+
 		# discriminator regularization loss
-		#if args.lambdas["r1"] > 0:
 		self.d_r1_loss = d_r1_loss(self.args).to(self.device)
 		print("initiailized r1 loss")
+
 		return "all losses created"
 
 	def configure_optimizers(self):
-		# encoder + decoder optim 
+		
 		params_g = self.decoder.parameters()
 		params_e = self.encoder.parameters()
 		params_d = self.discriminator.parameters()
@@ -293,7 +293,6 @@ class Coach:
 					loss_type = which_loss
 				)
 
-
 				# combine losses to get generator and encoder losses
 				decoder_loss = generator_loss + perceptual_loss + cycle_loss + recon_loss
 				encoder_loss = perceptual_loss + cycle_loss + recon_loss
@@ -315,26 +314,25 @@ class Coach:
 				self.optimizer_e.step()
 
 				# all losses
-				# TODO: does not aggregate duplicates, instead replaces them
-				# loss_dict = discriminator_loss_dict | generator_loss_dict | recon_loss_dict | perceptual_loss_dict | cycle_loss_dict
 				loss_dict = dict(discriminator_loss_dict.items() | generator_loss_dict.items() | recon_loss_dict.items() | perceptual_loss_dict.items() | cycle_loss_dict.items())
-
+				loss_dict["loss"] = sum([loss_dict[key] for key in loss_dict if key != "loss"])
+				
 				# Logging related
 				if self.global_step % self.args.wandb_interval == 0:
 					self.print_metrics(loss_dict, prefix='train')
 					self.log_metrics(loss_dict, prefix='train')
 
-				# Log images of first batch to wandb
-				if self.args.use_wandb and batch_idx == 0:
+				# Log images if log_image_interval
+				if self.args.use_wandb and self.global_step % self.args.log_image_interval == 0:
 					self.wb_logger.log_images_to_wandb(x_2, y_2, y_2_hat, prefix="train", step=self.global_step, opts=self.args)
 
 				# # Validation related
 				val_loss_dict = None
-				# if self.global_step % self.args.val_interval == 0 or self.global_step == self.args.max_steps:
-				# 	val_loss_dict = self.validate()
-				# 	if val_loss_dict and (self.best_val_loss is None or val_loss_dict['loss'] < self.best_val_loss):
-				# 		self.best_val_loss = val_loss_dict['loss']
-				# 		self.checkpoint_me(val_loss_dict, is_best=True)
+				if self.global_step % self.args.val_interval == 0 or self.global_step == self.args.max_steps:
+					val_loss_dict = self.validate()
+					if val_loss_dict and (self.best_val_loss is None or val_loss_dict['loss'] < self.best_val_loss):
+						self.best_val_loss = val_loss_dict['loss']
+						self.checkpoint_me(val_loss_dict, is_best=True)
 
 				if self.global_step % self.args.save_interval == 0 or self.global_step == self.args.max_steps:
 					if val_loss_dict is not None:
@@ -347,6 +345,7 @@ class Coach:
 					break
 
 				self.global_step += 1
+
 
 	def set_train_status(self, train = True):
 		if train:
@@ -433,11 +432,12 @@ class Coach:
 
 		self.set_train_status(train = False)
 		agg_loss_dict = []
-		for batch_idx, batch in enumerate(self.test_dataloader):
-
+		for batch_idx, batch in tqdm(enumerate(self.test_dataloader), total = len(self.test_dataloader.dataset), desc = "validation"):
+			if batch_idx > 50: return
 			x_all, y_all = batch["inputs"], batch["labels"]
 
 			with torch.no_grad():
+
 				# during validation only use the autoencoder branch 
 				x_2, y_2 = x_all[1], y_all[1]
 				x_2, y_2 = x_2.to(self.device).float(), y_2.to(self.device).float()
@@ -446,16 +446,17 @@ class Coach:
 				conditioning_2 = self.classifier(x_2)	
 
 				# get encodings
-				E_2 = self.encoder(x_2)
+				encoder_rep_x_2 = self.encoder(x_2)
 
-				# get output of generator	
+				# get output of generator
 				y_2_hat, latent_2 = self.decoder(
-					style = [E_2], 
-					conditioning = conditioning_2, 
+					styles = [encoder_rep_x_2],
+					conditioning = conditioning_2,
 					use_style_encoder = False, 
 					return_latents = True
 				)
 
+				# get encoding of y_2_hat for loss purposes
 				w_fake_2 = self.encoder(y_2_hat)
 				
 				# calculate losses
@@ -464,7 +465,7 @@ class Coach:
 					x = x_2,
 					y_hat = y_2_hat,
 					w_fake = w_fake_2,
-					w_real = E_2,
+					w_real = encoder_rep_x_2,
 					loss_type = which_loss
 				)
 				
@@ -483,11 +484,8 @@ class Coach:
 				)
 
 				# combine losses
-				# TODO: loss_dict union replaces duplicates
-				# loss_dict = recon_loss_dict | perceptual_loss_dict | cycle_loss_dict
-				loss_dict = dict(
-					recon_loss_dict.items() | perceptual_loss_dict.items() | cycle_loss_dict.items()
-				)
+				loss_dict = dict(recon_loss_dict.items() | perceptual_loss_dict.items() | cycle_loss_dict.items())
+				loss_dict["loss"] = sum([loss_dict[key] for key in loss_dict if key != "loss"])
 
 			agg_loss_dict.append(loss_dict)
 
@@ -497,16 +495,10 @@ class Coach:
 									  subscript='{:04d}'.format(batch_idx))
 
 			# Log images of first batch to wandb
-			if self.args.use_wandb and batch_idx == 0:
+			if self.args.use_wandb and batch_idx % self.args.log_image_interval == 0:
 				self.wb_logger.log_images_to_wandb(x_2, y_2, y_2_hat, prefix="test", step=self.global_step, opts=self.args)
 
-			# For first step just do sanity test on small amount of data
-			if self.global_step == 0 and batch_idx >= 4:
-				self.set_train_status(train=True)
-				return None  # Do not log, inaccurate in first batch
-
 		loss_dict = train_utils.aggregate_loss_dict(agg_loss_dict)
-		loss_dict["loss"] = sum([loss_dict[key] for key in loss_dict])
 		
 		self.log_metrics(loss_dict, prefix='test')
 		self.print_metrics(loss_dict, prefix='test')
@@ -525,7 +517,7 @@ class Coach:
 		if self.args.use_wandb:
 			self.wb_logger.log(prefix, metrics_dict, self.global_step)
 
-	def parse_and_log_images(self, x, y, y_hat, title, subscript=None, display_count=2):
+	def parse_and_log_images(self, x, y, y_hat, title, subscript=None, display_count=1):
 		im_data = []
 		for i in range(display_count):
 			
@@ -537,8 +529,8 @@ class Coach:
 			# for current y_hat, get clf decision and top class probability
 			curr_y_hat =  y_hat[i].unsqueeze(0)
 			out_y_hat = self.classifier(curr_y_hat)
-			values_y_hat, preds_y_hat = torch.max(out_y_hat, 1) 
-
+			values_y_hat, preds_y_hat = torch.max(F.softmax(out_y_hat, dim = 1), 1)
+			
 			# define title info
 			title_info = {
 				"true_label": y, 
