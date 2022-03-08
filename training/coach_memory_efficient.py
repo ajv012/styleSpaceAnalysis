@@ -37,6 +37,9 @@ class Coach:
 
         self.global_step = 0
 
+        # accumaltion decay factor
+        self.accum = 0.5 ** (32 / (10 * 1000))
+
         # TODO: Allow multiple GPU? currently using CUDA_VISIBLE_DEVICES (use distributed module)
         self.device = self.args.device
 
@@ -101,7 +104,13 @@ class Coach:
         # initialize decoder
         self.decoder = Generator(self.args.output_size, style_dim=self.args.latent_dim, c_dim=2,
                                  n_mlp=self.args.n_mlp, channel_multiplier=self.args.channel_multiplier).to(self.device)
-
+        
+        # initialize decoder to keep ema
+        self.decoder_ema = Generator(self.args.output_size, style_dim=self.args.latent_dim, c_dim=2,
+                                 n_mlp=self.args.n_mlp, channel_multiplier=self.args.channel_multiplier).to(self.device)
+        self.decoder_ema.eval()
+        self.accumulate(model1 = self.decoder_ema, model2 = self.decoder, decay = 0)
+        
         # initialize discriminator
         self.discriminator = Discriminator(self.args.img_size, self.args.channel_multiplier).to(self.device)
 
@@ -331,6 +340,9 @@ class Coach:
                 generator_loss.backward()
                 self.optimizer_g.step()
 
+                # update the ema model
+                self.accumulate(model1 = self.decoder_ema, model2 = self.decoder, decay = self.accum)
+
                 ##################################################################################
                 #################### Encoder update ####################################
                 self.requires_grad(self.encoder, True)
@@ -387,8 +399,6 @@ class Coach:
                 self.optimizer_e.step()
 
                 # all losses
-                # TODO: does not aggregate duplicates, instead replaces them
-                # loss_dict = discriminator_loss_dict | generator_loss_dict | recon_loss_dict | perceptual_loss_dict | cycle_loss_dict
                 loss_dict = dict(discriminator_loss_dict.items() | generator_loss_dict.items() | recon_loss_dict.items() | perceptual_loss_dict.items() | cycle_loss_dict.items())
                 loss_dict["loss"] = sum([loss_dict[key] for key in loss_dict if key != "loss"])
 
@@ -422,6 +432,13 @@ class Coach:
 
                 self.global_step += 1
 
+    def accumulate(self, model1, model2, decay=0.999):
+        par1 = dict(model1.named_parameters())
+        par2 = dict(model2.named_parameters())
+
+        for k in par1.keys():
+            par1[k].data.mul_(decay).add_(par2[k].data, alpha=1 - decay)
+    
     def set_train_status(self, train=True):
         if train:
             self.encoder.train()
@@ -523,7 +540,7 @@ class Coach:
                 encoder_rep_x_2 = self.encoder(x_2)
 
                 # get output of generator
-                y_2_hat, latent_2 = self.decoder(
+                y_2_hat, latent_2 = self.decoder_ema(
                     styles=[encoder_rep_x_2],
                     conditioning=conditioning_2,
                     use_style_encoder=False,
@@ -644,7 +661,7 @@ class Coach:
 
     def __get_save_dict(self):
         save_dict = {
-            'generator_state_dict': self.decoder.state_dict(),
+            'generator_state_dict': self.decoder_ema.state_dict(),
             'discriminator_state_dict': self.discriminator.state_dict(),
             'encoder_state_dict': self.encoder.state_dict(),
             "optim_g": self.optimizer_g,
