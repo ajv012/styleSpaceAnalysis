@@ -25,7 +25,7 @@ class afhq_Transforms(TransformsConfig):
 				transforms.ToTensor(),
 				transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5])]),
 			'transform_val': transforms.Compose([
-				transforms.Resize((512)),
+				transforms.Resize((128)),
 				transforms.ToTensor(),
 				transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5])]),
 			'transform_inference': transforms.Compose([

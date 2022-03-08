@@ -13,7 +13,7 @@ import torch.nn as nn
 # sys.path.append("..")
 
 
-from training.coach import Coach
+from training.coach_memory_efficient import Coach
 
 
 def main():
@@ -24,7 +24,7 @@ def main():
                     exp_dir = "/data/vision/torralba/scratch/swamiviv/stylex_afhq_cat_dog",
                     seed = 7,
                     labels = ["cat", "dog"],
-                    batch_size = 2,
+                    batch_size = 8,
                     test_batch_size = 1,
                     epochs = 50,
                     num_workers = 1,
@@ -51,12 +51,12 @@ def main():
                     start_from_latent_avg = False, #Whether to add average latent vector to generate codes from encoder
                     learn_in_w = True, # Whether to learn in w space instead of w+,
                     img_size = 128, #image sizes for the model
-                    channel_multiplier = 2, # channel multiplier factor for the model. config-f = 2, else = 1,
+                    channel_multiplier = 1, # channel multiplier factor for the model. config-f = 2, else = 1,
                     val_interval = 1000, #validation interval,
                     d_reg_every = 16, # interval of the applying r1 regularization,
                     g_reg_every = 4, # interval of the applying path length regularization
                      # TODO: crashes when this is changed - need debugging
-                    latent_dim = 512, # latent dim of stylegan W network,
+                    latent_dim = 256, # latent dim of stylegan W network,
                     num_enc_layers = 50, # number of layers in gradual style encoder,
                     mode_enc = "ir_se", # mode for gradual style encoder 
                     input_nc = 3, # number of input channels in img
