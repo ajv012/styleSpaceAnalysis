@@ -104,7 +104,7 @@ class Coach:
         # initialize decoder
         self.decoder = Generator(self.args.output_size, style_dim=self.args.latent_dim, c_dim=2,
                                  n_mlp=self.args.n_mlp, channel_multiplier=self.args.channel_multiplier).to(self.device)
-        
+
         # initialize decoder to keep ema
         self.decoder_ema = Generator(self.args.output_size, style_dim=self.args.latent_dim, c_dim=2,
                                  n_mlp=self.args.n_mlp, channel_multiplier=self.args.channel_multiplier).to(self.device)

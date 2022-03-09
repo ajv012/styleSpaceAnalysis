@@ -2,7 +2,7 @@ import torch
 from torch import nn
 from torch import autograd
 import math 
-
+import torch.distributed.autograd as dist_autograd
 
 class path_reg_loss(nn.Module):
     def __init__(self):
@@ -11,7 +11,10 @@ class path_reg_loss(nn.Module):
 
     def forward(self, fake_img, latents, mean_path_length, decay=0.01):
         noise = torch.randn_like(fake_img) / math.sqrt(fake_img.shape[2] * fake_img.shape[3])
-        grad, = autograd.grad(outputs=(fake_img * noise).sum(), inputs=latents, create_graph=True)
+        grad, = autograd.grad(
+            outputs=(fake_img * noise).sum(), inputs=latents, create_graph=True,
+        )
+        
         path_lengths = torch.sqrt(grad.pow(2).sum(2).mean(1))
 
         path_mean = mean_path_length + decay * (path_lengths.mean() - mean_path_length)
