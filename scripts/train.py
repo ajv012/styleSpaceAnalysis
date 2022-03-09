@@ -13,7 +13,7 @@ import torch.nn as nn
 # sys.path.append("..")
 
 
-from training.coach_memory_efficient import Coach
+from training.coach import Coach
 
 
 def main():
@@ -37,7 +37,6 @@ def main():
                     scheduler = "STEP",
                     scheduler_step_size = 7,
                     scheduler_gamma = 0.1,
-                    exp_name = "stylespace_analysis_catdog",
                     wandb_config={"learning_rate": 0.0001, "epochs": 2, "batch_size": 64},
                     use_wandb=True,
                     wandb_interval=50,
@@ -56,7 +55,6 @@ def main():
                     val_interval = 1000, #validation interval,
                     d_reg_every = 16, # interval of the applying r1 regularization,
                     g_reg_every = 4, # interval of the applying path length regularization
-                     # TODO: crashes when this is changed - need debugging
                     latent_dim = 256, # latent dim of stylegan W network,
                     num_enc_layers = 50, # number of layers in gradual style encoder,
                     mode_enc = "ir_se", # mode for gradual style encoder 
@@ -64,7 +62,14 @@ def main():
                     n_mlp = 8, # number of mlp in stylegan,
                     path_to_weights = "/data/vision/polina/scratch/avaidya/styleSpaceAnalysis/checkpoints/cat_dog_weights/checkpoint_2.pt",
                     log_image_interval = 100,
+                    exp_name = ""
     )
+
+    # define experiment name
+    main_tag = "cat_dog"
+    sub_tag = "baseline"
+    exp_name = "{}_{}".format(main_tag, sub_tag)
+    args.exp_name = exp_name
     print("defined args") 
 
     os.makedirs(args.exp_dir, exist_ok=True)
