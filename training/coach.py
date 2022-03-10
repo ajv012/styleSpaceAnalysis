@@ -3,6 +3,7 @@ import matplotlib
 import matplotlib.pyplot as plt
 import math
 from tqdm import tqdm
+import pdb
 matplotlib.use('Agg')
 
 import torch
@@ -39,6 +40,7 @@ class Coach:
 
         # accumaltion decay factor
         self.accum = 0.5 ** (32 / (10 * 1000))
+        self.r_t_stat = 0
 
         # TODO: Allow multiple GPU? currently using CUDA_VISIBLE_DEVICES (use distributed module)
         self.device = self.args.device
@@ -256,14 +258,16 @@ class Coach:
                     real_img_aug, _ = augment(x_1, self.ada_aug_p)
                     fake_img, _ = augment(y_1_hat, self.ada_aug_p)
                 else:
-                    real_img_aug = real_img
+                    real_img_aug = x_1
+                    fake_img = y_1_hat
 
                 # use x1 to get discriminator outputs
                 real_pred_1 = self.discriminator(real_img_aug)
                 fake_pred_1 = self.discriminator(fake_img)
 
                 discriminator_loss, discriminator_loss_dict, _ = self.calc_loss(
-                    x = real_img_aug,
+                    x = x_1,
+                    x_aug=real_img_aug,
                     fake_pred=fake_pred_1,
                     real_pred=real_pred_1,
                     loss_type=which_loss
@@ -296,22 +300,28 @@ class Coach:
                     return_latents=True
                 )
 
-                if self.args.augment:
-                    fake_img, _ = augment(y_1_hat, self.ada_aug_p)
+                # if self.args.augment:
+                #     fake_img, _ = augment(y_1_hat, self.ada_aug_p)
+                # else:
+                #     fake_img = y_1_hat
 
                 # use x1 to get discriminator outputs
-                real_pred_1 = self.discriminator(real_img_aug)
-                fake_pred_1 = self.discriminator(fake_img)
+                # real_pred_1 = self.discriminator(real_img_aug)
+                # fake_pred_1 = self.discriminator(fake_img)
+                real_pred_1 = self.discriminator(x_1)
+                fake_pred_1 = self.discriminator(y_1_hat)
 
                 # generator (adversarial losses)
-                g_regularize = self.global_step % self.args.g_reg_every == 0
+                #g_regularize = self.global_step % self.args.g_reg_every == 0
+                g_regularize = False
                 if g_regularize:
                     which_loss = ["adv_g", "reg"]
                 else:
                     which_loss = ["adv_g"]
                 generator_loss, generator_loss_dict, mean_path_length = self.calc_loss(
-                    x = real_img_aug,
-                    y_hat=fake_img,
+                    x = x_1,
+                    y_hat=y_1_hat,
+                    y_hat_aug=y_1_hat,
                     latent=latent_1,
                     fake_pred=fake_pred_1,
                     real_pred=real_pred_1,
@@ -359,6 +369,8 @@ class Coach:
                     loss_type=which_loss
                 )
                 generator_loss += (recon_loss + perceptual_loss + cycle_loss)
+                print("going into trace 1")
+                pdb.set_trace()
 
                 self.decoder.zero_grad()
                 generator_loss.backward()
@@ -386,9 +398,6 @@ class Coach:
                     use_style_encoder=False,
                     return_latents=True
                 )
-
-                if self.args.augment:
-                    fake_img, _ = augment(y_2_hat, self.ada_aug_p)
 
                 # get encoding of y_2_hat for loss purposes
                 # TODO get encoding of augmented fake image or just generated image?
@@ -419,7 +428,8 @@ class Coach:
                     y_hat=y_2_hat,
                     loss_type=which_loss
                 )
-
+                print("going into trace 2")
+                pdb.set_trace()
                 # combine losses to get generator and encoder losses
                 encoder_loss = perceptual_loss + cycle_loss + recon_loss
 
@@ -496,7 +506,7 @@ class Coach:
             else:
                 f.write(f'Step - {self.global_step}, \n{loss_dict}\n')
 
-    def calc_loss(self, x=None, y_hat=None, latent=None, fake_pred=None, real_pred=None, w_fake=None, w_real=None,
+    def calc_loss(self, x=None, x_aug=None, y_hat=None, y_hat_aug=None, latent=None, fake_pred=None, real_pred=None, w_fake=None, w_real=None,
                   mean_path_length=None, loss_type=None):
         r"""
         loss_type is a list
@@ -514,7 +524,7 @@ class Coach:
                 loss_dict["adv_loss_d"] = self.args.lambdas["adv_d"] * loss_adv
                 loss += loss_dict["adv_loss_d"]
             if curr_loss_name == "r1":
-                loss_r1 = self.d_r1_loss(real_pred, x)
+                loss_r1 = self.d_r1_loss(real_pred, x_aug)
                 loss_dict["r1_loss"] = self.args.lambdas["r1"] * loss_r1
                 loss += loss_dict["r1_loss"]
             if curr_loss_name == "adv_g":
@@ -523,7 +533,7 @@ class Coach:
                 loss += loss_dict["adv_loss_g"]
             # path regularization
             if curr_loss_name == "reg":
-                loss_reg, mean_path_length, path_lengths = self.reg_loss(y_hat, latent, mean_path_length)
+                loss_reg, mean_path_length, path_lengths = self.reg_loss(y_hat_aug, latent, mean_path_length)
                 loss_dict["reg"] = self.args.lambdas["reg"] * loss_reg
                 loss += loss_dict["reg"]
 
@@ -553,7 +563,6 @@ class Coach:
         return loss, loss_dict, mean_path_length
 
     def validate(self):
-
         self.set_train_status(train=False)
         agg_loss_dict = []
         for batch_idx, batch in tqdm(enumerate(self.test_dataloader), total = len(self.test_dataloader.dataset), desc = "validation"):

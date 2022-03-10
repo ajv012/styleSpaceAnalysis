@@ -39,7 +39,7 @@ def main():
         scheduler_gamma = 0.1,
         wandb_config={"learning_rate": 0.0001, "epochs": 2, "batch_size": 64},
         use_wandb=True,
-        wandb_interval=50,
+        wandb_interval=1,
         output_size = 128, #Stylegan decoder output size
         encoder_type = "gradual",
         n_styles = 0,
