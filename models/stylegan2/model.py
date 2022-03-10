@@ -501,7 +501,8 @@ class Generator(nn.Module):
 
             i += 2
 
-        image = self.output_act(skip)
+        # image = self.output_act(skip)
+        image = skip
 
         if return_latents:
             return image, latent

@@ -25,7 +25,7 @@ def main():
         exp_dir = "/data/vision/polina/scratch/avaidya/styleSpaceAnalysis/",
         seed = 7,
         labels = ["cat", "dog"],
-        batch_size = 12,
+        batch_size = 8,
         test_batch_size = 2,
         epochs = 50,
         num_workers = 1,
