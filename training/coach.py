@@ -26,7 +26,7 @@ from models.stylegan2.model import Generator
 from models.discriminator.model import Discriminator
 from models.classifier import Classifier
 
-from utils.non_leaking import augment, AdaptiveAugment
+from utils.non_leaky import augment, AdaptiveAugment
 from utils.wandb_utils import WBLogger
 from training.ranger import Ranger
 
@@ -263,6 +263,7 @@ class Coach:
                 fake_pred_1 = self.discriminator(fake_img)
 
                 discriminator_loss, discriminator_loss_dict, _ = self.calc_loss(
+                    x = real_img_aug,
                     fake_pred=fake_pred_1,
                     real_pred=real_pred_1,
                     loss_type=which_loss
@@ -296,7 +297,7 @@ class Coach:
                 )
 
                 if self.args.augment:
-                    fake_img, _ = augment(y_1_hat, ada_aug_p)
+                    fake_img, _ = augment(y_1_hat, self.ada_aug_p)
 
                 # use x1 to get discriminator outputs
                 real_pred_1 = self.discriminator(real_img_aug)
@@ -387,7 +388,7 @@ class Coach:
                 )
 
                 if self.args.augment:
-                    fake_img, _ = augment(y_2_hat, ada_aug_p)
+                    fake_img, _ = augment(y_2_hat, self.ada_aug_p)
 
                 # get encoding of y_2_hat for loss purposes
                 # TODO get encoding of augmented fake image or just generated image?
@@ -431,7 +432,7 @@ class Coach:
                 # all losses
                 loss_dict = dict(discriminator_loss_dict.items() | generator_loss_dict.items() | recon_loss_dict.items() | perceptual_loss_dict.items() | cycle_loss_dict.items())
                 loss_dict["loss"] = sum([loss_dict[key] for key in loss_dict if key != "loss"])
-                loss_dict["rt"] = r_t_stat
+                loss_dict["rt"] = self.r_t_stat
 
                 # Logging related
                 if self.global_step % self.args.wandb_interval == 0:
@@ -565,10 +566,10 @@ class Coach:
                 x_1, y_1 = x_1.to(self.device).float(), y_1.to(self.device).float()
 
                 # get conditioning
-                conditioning_2 = self.classifier(x_1)
+                conditioning_1 = self.classifier(x_1)
 
                 # get encodings
-                encoder_rep_x_2 = self.encoder(x_1)
+                encoder_rep_x_1 = self.encoder(x_1)
 
                 # get output of generator
                 y_1_hat, latent_2 = self.decoder_ema(
