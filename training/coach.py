@@ -26,8 +26,8 @@ from models.stylegan2.model import Generator
 from models.discriminator.model import Discriminator
 from models.classifier import Classifier
 
+from utils.non_leaking import augment, AdaptiveAugment
 from utils.wandb_utils import WBLogger
-
 from training.ranger import Ranger
 
 
@@ -49,6 +49,15 @@ class Coach:
         # Initialize all the networks
         models_init = self.init_models()
         print(models_init)
+        self.ada_aug_p = self.args.augment_p if self.args.augment_p > 0 else 0.0
+
+        if self.args.augment and self.args.augment_p == 0:
+            self.ada_augment = AdaptiveAugment(
+                ada_aug_target = self.args.ada_target, 
+                ada_aug_len = self.args.ada_length, 
+                update_every = 8, 
+                device = self.device
+            )
 
         # Initialize loss
         losses_init = self.init_losses(self.args)
@@ -242,13 +251,18 @@ class Coach:
                 else:
                     which_loss = ["adv_d"]
 
-                # use x1 to get discriminator outputs
-                real_pred_1 = self.discriminator(x_1)
-                fake_pred_1 = self.discriminator(y_1_hat)
+                # augment images before sending to discriminator 
+                if self.args.augment:
+                    real_img_aug, _ = augment(x_1, self.ada_aug_p)
+                    fake_img, _ = augment(y_1_hat, self.ada_aug_p)
+                else:
+                    real_img_aug = real_img
 
+                # use x1 to get discriminator outputs
+                real_pred_1 = self.discriminator(real_img_aug)
+                fake_pred_1 = self.discriminator(fake_img)
 
                 discriminator_loss, discriminator_loss_dict, _ = self.calc_loss(
-                    x_1,
                     fake_pred=fake_pred_1,
                     real_pred=real_pred_1,
                     loss_type=which_loss
@@ -258,6 +272,12 @@ class Coach:
                 self.discriminator.zero_grad()
                 discriminator_loss.backward()
                 self.optimizer_d.step()
+
+                # update augments
+                if self.args.augment and self.args.augment_p == 0:
+                    self.ada_aug_p = self.ada_augment.tune(real_pred_1)
+                    self.r_t_stat = self.ada_augment.r_t_stat
+
                 ##################################################################################
                 #################### Generator update ################################
                 self.requires_grad(self.encoder, False)
@@ -275,9 +295,12 @@ class Coach:
                     return_latents=True
                 )
 
+                if self.args.augment:
+                    fake_img, _ = augment(y_1_hat, ada_aug_p)
+
                 # use x1 to get discriminator outputs
-                real_pred_1 = self.discriminator(x_1)
-                fake_pred_1 = self.discriminator(y_1_hat)
+                real_pred_1 = self.discriminator(real_img_aug)
+                fake_pred_1 = self.discriminator(fake_img)
 
                 # generator (adversarial losses)
                 g_regularize = self.global_step % self.args.g_reg_every == 0
@@ -286,8 +309,8 @@ class Coach:
                 else:
                     which_loss = ["adv_g"]
                 generator_loss, generator_loss_dict, mean_path_length = self.calc_loss(
-                    x_1,
-                    y_hat=y_1_hat,
+                    x = real_img_aug,
+                    y_hat=fake_img,
                     latent=latent_1,
                     fake_pred=fake_pred_1,
                     real_pred=real_pred_1,
@@ -350,6 +373,8 @@ class Coach:
                 self.requires_grad(self.discriminator, False)
 
                 ########### autoencoder (works with encoder and x_2) ###########
+                # TODO augment parameters from previous part affecting this part? 
+                # TODO get encoding of augmented real image or just real image?
                 # get encodings
                 encoder_rep_x_2 = self.encoder(x_2)
 
@@ -361,11 +386,16 @@ class Coach:
                     return_latents=True
                 )
 
+                if self.args.augment:
+                    fake_img, _ = augment(y_2_hat, ada_aug_p)
+
                 # get encoding of y_2_hat for loss purposes
+                # TODO get encoding of augmented fake image or just generated image?
                 w_fake_2 = self.encoder(y_2_hat)
 
                 ########### calculate losses ###########
                 # reconstruction losses
+                # TODO recon losses on augmented images?
                 which_loss = ["rec_x", "rec_w"]
                 recon_loss, recon_loss_dict, _ = self.calc_loss(
                     x=x_2,
@@ -401,6 +431,7 @@ class Coach:
                 # all losses
                 loss_dict = dict(discriminator_loss_dict.items() | generator_loss_dict.items() | recon_loss_dict.items() | perceptual_loss_dict.items() | cycle_loss_dict.items())
                 loss_dict["loss"] = sum([loss_dict[key] for key in loss_dict if key != "loss"])
+                loss_dict["rt"] = r_t_stat
 
                 # Logging related
                 if self.global_step % self.args.wandb_interval == 0:
@@ -530,46 +561,46 @@ class Coach:
 
             with torch.no_grad():
                 # during validation only use the autoencoder branch
-                x_2, y_2 = x_all[1], y_all[1]
-                x_2, y_2 = x_2.to(self.device).float(), y_2.to(self.device).float()
+                x_1, y_1 = x_all[0], y_all[0]
+                x_1, y_1 = x_1.to(self.device).float(), y_1.to(self.device).float()
 
                 # get conditioning
-                conditioning_2 = self.classifier(x_2)
+                conditioning_2 = self.classifier(x_1)
 
                 # get encodings
-                encoder_rep_x_2 = self.encoder(x_2)
+                encoder_rep_x_2 = self.encoder(x_1)
 
                 # get output of generator
-                y_2_hat, latent_2 = self.decoder_ema(
-                    styles=[encoder_rep_x_2],
-                    conditioning=conditioning_2,
+                y_1_hat, latent_2 = self.decoder_ema(
+                    styles=[encoder_rep_x_1],
+                    conditioning=conditioning_1,
                     use_style_encoder=False,
                     return_latents=True
                 )
 
-                w_fake_2 = self.encoder(y_2_hat)
+                w_fake_1 = self.encoder(y_1_hat)
 
                 # calculate losses
                 which_loss = ["rec_x", "rec_w"]
                 recon_loss, recon_loss_dict, _ = self.calc_loss(
-                    x=x_2,
-                    y_hat=y_2_hat,
-                    w_fake=w_fake_2,
-                    w_real=encoder_rep_x_2,
+                    x=x_1,
+                    y_hat=y_1_hat,
+                    w_fake=w_fake_1,
+                    w_real=encoder_rep_x_1,
                     loss_type=which_loss
                 )
 
                 which_loss = ["lpips"]
                 perceptual_loss, perceptual_loss_dict, _ = self.calc_loss(
-                    x=x_2,
-                    y_hat=y_2_hat,
+                    x=x_1,
+                    y_hat=y_1_hat,
                     loss_type=which_loss
                 )
 
                 which_loss = ["clf"]
                 cycle_loss, cycle_loss_dict, _ = self.calc_loss(
-                    x=x_2,
-                    y_hat=y_2_hat,
+                    x=x_1,
+                    y_hat=y_1_hat,
                     loss_type=which_loss
                 )
 
@@ -582,7 +613,7 @@ class Coach:
             # Logging related
             # saving all generated images with the titles on disk
             self.parse_and_log_images(
-                x_2, y_2, y_2_hat,
+                x_1, y_1, y_1_hat,
                 title='images/test/dogs-cats',
                 subscript='{:04d}'.format(batch_idx),
                 display_count = 1
@@ -590,7 +621,7 @@ class Coach:
 
             # Log images of first batch to wandb (number of images on wandb will be same as batch size)
             if self.args.use_wandb and batch_idx == 0:
-                self.wb_logger.log_images_to_wandb(x_2, y_2, y_2_hat, prefix="test", step=self.global_step,
+                self.wb_logger.log_images_to_wandb(x_1, y_1, y_1_hat, prefix="test", step=self.global_step,
                                                    opts=self.args)
 
             # For first step just do sanity test on small amount of data

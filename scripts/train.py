@@ -64,7 +64,12 @@ def main():
         log_image_interval = 100,
         exp_name = "",
         device = "cuda:1", # if you don't want to use parallel then change device to cuda:{preferred device_id}
-        # device_ids = [0, 1, 2, 3] # if you don't want to use parallel then change device_id to [preferred device_id]
+        # device_ids = [0, 1, 2, 3], # if you don't want to use parallel then change device_id to [preferred device_id]
+        augment = True, # apply non leaking augmentation
+        augment_p = 0, # probability of applying augmentation. 0 = use adaptive augmentation
+        ada_target = 0.6, # target augmentation probability for adaptive augmentation
+        ada_length = 500 * 1000, # target duraing to reach augmentation probability for adaptive augmentation
+        ada_every = 256, # probability update interval of the adaptive augmentation
     )
 
     # define experiment name
