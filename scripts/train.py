@@ -25,13 +25,13 @@ def main():
         exp_dir = "/data/vision/polina/scratch/avaidya/styleSpaceAnalysis/",
         seed = 7,
         labels = ["cat", "dog"],
-        batch_size = 2,
+        batch_size = 12,
         test_batch_size = 2,
         epochs = 50,
         num_workers = 1,
         class_names = {0:"cat", 1:"dog"} ,
-        lr_g = 0.001,
-        lr_d = 0.001,
+        lr_g = 0.0002,
+        lr_d = 0.0002,
         momentum = 0.9,
         optim_name = "ranger",
         scheduler = "STEP",
@@ -43,7 +43,7 @@ def main():
         output_size = 128, #Stylegan decoder output size
         encoder_type = "gradual",
         n_styles = 0,
-        lambdas = {"adv_d":1.,"adv_g":1., "reg":1., "rec_x":1., "rec_w":1., "lpips":1., "clf":1., "r1" : 5},
+        lambdas = {"adv_d":1,"adv_g":1, "reg":1, "rec_x":0.1, "rec_w":1, "lpips":0.1, "clf":0.1, "r1" : 2},
         train_decoder = True, # whether to train decoder,
         dataset_type = "afhq",
         max_steps = 50000, # max number of training steps,
@@ -55,7 +55,7 @@ def main():
         val_interval = 1000, #validation interval,
         d_reg_every = 16, # interval of the applying r1 regularization,
         g_reg_every = 4, # interval of the applying path length regularization
-        latent_dim = 256, # latent dim of stylegan W network,
+        latent_dim = 512, # latent dim of stylegan W network,
         num_enc_layers = 50, # number of layers in gradual style encoder,
         mode_enc = "ir_se", # mode for gradual style encoder 
         input_nc = 3, # number of input channels in img
@@ -63,13 +63,13 @@ def main():
         path_to_weights = "/data/vision/polina/scratch/avaidya/styleSpaceAnalysis/checkpoints/cat_dog_weights/checkpoint_2.pt",
         log_image_interval = 100,
         exp_name = "",
-        device = "cuda", # if you don't want to use parallel then change device to cuda:{preferred device_id}
+        device = "cuda:1", # if you don't want to use parallel then change device to cuda:{preferred device_id}
         # device_ids = [0, 1, 2, 3] # if you don't want to use parallel then change device_id to [preferred device_id]
     )
 
     # define experiment name
     main_tag = "cat_dog"
-    sub_tag = "baseline"
+    sub_tag = "baseline_author_params_AV"
     exp_name = "{}_{}".format(main_tag, sub_tag)
     args.exp_name = exp_name
     print("defined args") 

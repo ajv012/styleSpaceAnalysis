@@ -525,7 +525,7 @@ class Coach:
         self.set_train_status(train=False)
         agg_loss_dict = []
         for batch_idx, batch in tqdm(enumerate(self.test_dataloader), total = len(self.test_dataloader.dataset), desc = "validation"):
-            if batch_idx > 50 : return
+            
             x_all, y_all = batch["inputs"], batch["labels"]
 
             with torch.no_grad():
@@ -585,7 +585,7 @@ class Coach:
                 x_2, y_2, y_2_hat,
                 title='images/test/dogs-cats',
                 subscript='{:04d}'.format(batch_idx),
-                display_count = self.args.batch_size
+                display_count = 1
             )
 
             # Log images of first batch to wandb (number of images on wandb will be same as batch size)
