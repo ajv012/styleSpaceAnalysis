@@ -113,15 +113,11 @@ class Coach:
                                                     mode=self.args.mode_enc, opts=self.args).to(self.device)
 
         # initialize decoder
-        # self.decoder = Generator(self.args.output_size, style_dim=self.args.latent_dim, c_dim=2,
-        #                          n_mlp=self.args.n_mlp, channel_multiplier=self.args.channel_multiplier).to(self.device)
-        self.decoder = Generator(self.args.output_size, style_dim=self.args.latent_dim, c_dim=0,
+        self.decoder = Generator(self.args.output_size, style_dim=self.args.latent_dim, c_dim=self.args.c_dim,
                                  n_mlp=self.args.n_mlp, channel_multiplier=self.args.channel_multiplier).to(self.device)
 
         # initialize decoder to keep ema
-        # self.decoder_ema = Generator(self.args.output_size, style_dim=self.args.latent_dim, c_dim=2,
-        #                          n_mlp=self.args.n_mlp, channel_multiplier=self.args.channel_multiplier).to(self.device)
-        self.decoder_ema = Generator(self.args.output_size, style_dim=self.args.latent_dim, c_dim=0,
+        self.decoder_ema = Generator(self.args.output_size, style_dim=self.args.latent_dim, c_dim=self.args.c_dim,
                                  n_mlp=self.args.n_mlp, channel_multiplier=self.args.channel_multiplier).to(self.device)
         self.decoder_ema.eval()
         self.accumulate(model1 = self.decoder_ema, model2 = self.decoder, decay = 0)
@@ -336,7 +332,7 @@ class Coach:
                 generator_loss, generator_loss_dict, mean_path_length = self.calc_loss(
                     x = x_1,
                     y_hat=y_1_hat,
-                    y_hat_aug=y_1_hat,
+                    y_hat_aug=fake_img,
                     latent=latent_1,
                     fake_pred=fake_pred_1,
                     real_pred=real_pred_1,
@@ -385,20 +381,20 @@ class Coach:
                 #     loss_type=which_loss
                 # )
 
-                which_loss = ["rec_x"]
-                recon_loss, recon_loss_dict, _ = self.calc_loss(
-                    x=x_1,
-                    y_hat=y_1_hat,
-                    loss_type=which_loss
-                )
+                # which_loss = ["rec_x"]
+                # recon_loss, recon_loss_dict, _ = self.calc_loss(
+                #     x=x_1,
+                #     y_hat=y_1_hat,
+                #     loss_type=which_loss
+                # )
                 
 
-                which_loss = ["lpips"]
-                perceptual_loss, perceptual_loss_dict, _ = self.calc_loss(
-                    x=x_1,
-                    y_hat=y_1_hat,
-                    loss_type=which_loss
-                )
+                # which_loss = ["lpips"]
+                # perceptual_loss, perceptual_loss_dict, _ = self.calc_loss(
+                #     x=x_1,
+                #     y_hat=y_1_hat,
+                #     loss_type=which_loss
+                # )
 
                 # which_loss = ["clf"]
                 # cycle_loss, cycle_loss_dict, _ = self.calc_loss(
@@ -406,9 +402,9 @@ class Coach:
                 #     y_hat=y_2_hat,
                 #     loss_type=which_loss
                 # )
-                cycle_loss = 0
-                cycle_loss_dict = {}
-                generator_loss += (recon_loss + perceptual_loss + cycle_loss)
+                # cycle_loss = 0
+                # cycle_loss_dict = {}
+                # generator_loss += (recon_loss + perceptual_loss + cycle_loss)
 
                 self.decoder.zero_grad()
                 generator_loss.backward()
@@ -474,7 +470,9 @@ class Coach:
                 # self.optimizer_e.step()
 
                 # all losses
-                loss_dict = dict(discriminator_loss_dict.items() | generator_loss_dict.items() | recon_loss_dict.items() | perceptual_loss_dict.items() | cycle_loss_dict.items())
+                #loss_dict = dict(discriminator_loss_dict.items() | generator_loss_dict.items() | recon_loss_dict.items() | perceptual_loss_dict.items() | cycle_loss_dict.items())
+                loss_dict = dict(discriminator_loss_dict.items() | generator_loss_dict.items() )
+
                 loss_dict["loss"] = sum([loss_dict[key] for key in loss_dict if key != "loss"])
                 loss_dict["rt"] = self.r_t_stat
 

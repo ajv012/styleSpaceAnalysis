@@ -21,11 +21,11 @@ def main():
     args = Namespace(
         train_dir = "/data/vision/polina/scratch/avaidya/data/afhq/train",
         val_dir = "/data/vision/polina/scratch/avaidya/data/afhq/val",
-        # exp_dir = "/data/vision/torralba/scratch/swamiviv/stylex_afhq_cat_dog",
-        exp_dir = "/data/vision/polina/scratch/avaidya/styleSpaceAnalysis/",
+        exp_dir = "/data/vision/torralba/scratch/swamiviv/stylex_afhq_cat_dog",
+        #exp_dir = "/data/vision/polina/scratch/avaidya/styleSpaceAnalysis/",
         seed = 7,
         labels = ["cat", "dog"],
-        batch_size = 12,
+        batch_size = 16,
         test_batch_size = 12,
         epochs = 50,
         num_workers = 1,
@@ -56,6 +56,7 @@ def main():
         d_reg_every = 16, # interval of the applying r1 regularization,
         g_reg_every = 4, # interval of the applying path length regularization
         latent_dim = 256, # latent dim of stylegan W network,
+        c_dim=0, #classifier output/ conditioning dim
         num_enc_layers = 50, # number of layers in gradual style encoder,
         mode_enc = "ir_se", # mode for gradual style encoder 
         input_nc = 3, # number of input channels in img
@@ -63,7 +64,7 @@ def main():
         path_to_weights = "/data/vision/polina/scratch/avaidya/styleSpaceAnalysis/checkpoints/cat_dog_weights/checkpoint_2.pt",
         log_image_interval = 100,
         exp_name = "",
-        device = "cuda:1", # if you don't want to use parallel then change device to cuda:{preferred device_id}
+        device = "cuda:0", # if you don't want to use parallel then change device to cuda:{preferred device_id}
         # device_ids = [0, 1, 2, 3], # if you don't want to use parallel then change device_id to [preferred device_id]
         augment = True, # apply non leaking augmentation
         augment_p = 0, # probability of applying augmentation. 0 = use adaptive augmentation
@@ -74,7 +75,7 @@ def main():
 
     # define experiment name
     main_tag = "cat_dog"
-    sub_tag = "style_gan_run"
+    sub_tag = "style_gan_run_no_recloss"
     exp_name = "{}_{}".format(main_tag, sub_tag)
     args.exp_name = exp_name
     print("defined args") 
