@@ -300,28 +300,26 @@ class Coach:
                     return_latents=True
                 )
 
-                # if self.args.augment:
-                #     fake_img, _ = augment(y_1_hat, self.ada_aug_p)
-                # else:
-                #     fake_img = y_1_hat
+                if self.args.augment:
+                    fake_img, _ = augment(y_1_hat, self.ada_aug_p)
+                else:
+                    fake_img = y_1_hat
 
                 # use x1 to get discriminator outputs
-                # real_pred_1 = self.discriminator(real_img_aug)
-                # fake_pred_1 = self.discriminator(fake_img)
-                real_pred_1 = self.discriminator(x_1)
-                fake_pred_1 = self.discriminator(y_1_hat)
+                real_pred_1 = self.discriminator(x_1) #real_img_aug
+                fake_pred_1 = self.discriminator(fake_img)
+
 
                 # generator (adversarial losses)
-                #g_regularize = self.global_step % self.args.g_reg_every == 0
-                g_regularize = False
+                g_regularize = self.global_step % self.args.g_reg_every == 0
                 if g_regularize:
                     which_loss = ["adv_g", "reg"]
                 else:
                     which_loss = ["adv_g"]
                 generator_loss, generator_loss_dict, mean_path_length = self.calc_loss(
                     x = x_1,
-                    y_hat=y_1_hat,
-                    y_hat_aug=y_1_hat,
+                    y_hat=fake_img,
+                    y_hat_aug=fake_img,
                     latent=latent_1,
                     fake_pred=fake_pred_1,
                     real_pred=real_pred_1,
@@ -369,8 +367,6 @@ class Coach:
                     loss_type=which_loss
                 )
                 generator_loss += (recon_loss + perceptual_loss + cycle_loss)
-                print("going into trace 1")
-                pdb.set_trace()
 
                 self.decoder.zero_grad()
                 generator_loss.backward()
@@ -428,8 +424,6 @@ class Coach:
                     y_hat=y_2_hat,
                     loss_type=which_loss
                 )
-                print("going into trace 2")
-                pdb.set_trace()
                 # combine losses to get generator and encoder losses
                 encoder_loss = perceptual_loss + cycle_loss + recon_loss
 
