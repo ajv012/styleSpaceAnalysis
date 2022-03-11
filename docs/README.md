@@ -8,3 +8,4 @@ Weights for the classifer can be found at: `/data/vision/polina/scratch/avaidya/
 
 # Experiments 
 - baseline: lr_g:1e-3, lr_d:1e-3, lr_e1e-3:, weights:{"adv_d":1.,"adv_g":1., "reg":1., "rec_x":1., "rec_w":1., "lpips":1., "clf":1., "r1" : 5}, img_size:128, latent_dim:256, batch_size:2, channel_multiplier:1
+- stye_gan_run: lr_g:1e-3, lr_d:1e-3, lr_e1e-3:, weights:{"adv_d":1.,"adv_g":1., "reg":1., "rec_x":1., "rec_w":1., "lpips":1., "clf":1., "r1" : 5}, img_size:256, latent_dim:256, batch_size:12, channel_multiplier:2

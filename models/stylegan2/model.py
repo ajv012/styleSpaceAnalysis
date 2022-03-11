@@ -287,12 +287,6 @@ class Generator(nn.Module):
             lr_mlp=0.01,
     ):
 
-        # proposed changes:
-        # - pass num_labels to generator 
-        # - use style_dim (512) for mapping network
-        # - use style_dim + num_labels after that (code rn is just getting rid of last two channels)
-        # - what about the hard coded channels?
-
         super().__init__()
 
         self.size = size
