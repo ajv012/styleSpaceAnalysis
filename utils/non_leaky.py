@@ -460,7 +460,6 @@ def random_apply_color(img, p, C=None):
 
 
 def augment(img, p, transform_matrix=(None, None)):
-    import pdb; pdb.set_trace()
     img, G = random_apply_affine(img, p, transform_matrix[0])
     img, C = random_apply_color(img, p, transform_matrix[1])
 
